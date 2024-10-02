@@ -93,11 +93,13 @@ def backtest_pairs(data, entry_threshold, exit_threshold):
   
   strategy_returns = pd.Series(returns, index=data.index)
   cumulative_strategy = (1 + strategy_returns).cumprod()
-  cumulative_buy_hold = (1 + daily_returns.mean(axis=1)).cumprod()
+  # Benchmark: Equal-weighted average of both stocks
+  benchmark_returns = daily_returns.mean(axis=1)
+  cumulative_buy_hold = (1 + benchmark_returns).cumprod()
   
-  return strategy_returns, cumulative_strategy, cumulative_buy_hold
+  return strategy_returns, cumulative_strategy, cumulative_buy_hold, benchmark_returns
 
-strategy_returns, cumulative_strategy, cumulative_buy_hold = backtest_pairs(data, entry_zscore, exit_zscore)
+strategy_returns, cumulative_strategy, cumulative_buy_hold, benchmark_returns = backtest_pairs(data, entry_zscore, exit_zscore)
 
 # Display data and plots
 st.header("Stock Prices")
@@ -157,7 +159,7 @@ def calculate_metrics(strategy_returns, benchmark_returns):
           "Sharpe Ratio": f"{sharpe_ratio:.2f}",
           "Max Drawdown": f"{max_drawdown:.2%}",
       },
-      "Benchmark (Average Buy & Hold)": {
+      "Benchmark (Equal-weighted Buy & Hold)": {
           "Total Return": f"{benchmark_total:.2%}",
           "Annualized Return": f"{benchmark_annual:.2%}",
           "Annualized Volatility": f"{benchmark_vol:.2%}",
