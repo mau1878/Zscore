@@ -2,65 +2,79 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
+import plotly.graph_objs as go
+from plotly.subplots import make_subplots
 from datetime import datetime
 
-# Set page configuration
+# Set Streamlit page configuration
 st.set_page_config(
-  page_title="Pairs Trading Backtester",
+  page_title="📈 Pairs Trading Backtester with Z-Score",
   layout="wide",
 )
 
+# Title and Description
 st.title("📈 Pairs Trading Backtester with Z-Score")
 st.markdown("""
 A simple backtesting tool for a pairs trading strategy using z-score to decide when to switch between two stocks.
 """)
 
-# Sidebar for user inputs
+# Sidebar for User Inputs
 st.sidebar.header("Select Parameters")
 
-# Function to get stock data
-@st.cache_data
+# Function to fetch stock data with caching and error handling
+@st.cache_data(ttl=60*60)  # Cache data for 1 hour
 def get_stock_data(ticker, start, end):
-  data = yf.download(ticker, start=start, end=end)
-  if data.empty:
-      st.error(f"Failed to fetch data for {ticker}. Please check the ticker symbol.")
-  return data['Adj Close']
+  try:
+      data = yf.download(ticker, start=start, end=end)
+      if data.empty:
+          st.error(f"Failed to fetch data for `{ticker}`. Please check the ticker symbol.")
+          return None
+      return data['Adj Close']
+  except Exception as e:
+      st.error(f"Error fetching data for `{ticker}`: {e}")
+      return None
 
-# User inputs
+# User Inputs
 default_ticker1 = 'AAPL'
 default_ticker2 = 'MSFT'
 
-ticker1 = st.sidebar.text_input("First Stock Ticker", value=default_ticker1)
-ticker2 = st.sidebar.text_input("Second Stock Ticker", value=default_ticker2)
+ticker1 = st.sidebar.text_input("First Stock Ticker", value=default_ticker1).upper()
+ticker2 = st.sidebar.text_input("Second Stock Ticker", value=default_ticker2).upper()
 
 start_date = st.sidebar.date_input("Start Date", value=datetime(2020, 1, 1))
 end_date = st.sidebar.date_input("End Date", value=datetime.today())
 
-zscore_window = st.sidebar.number_input("Z-Score Window", min_value=5, max_value=100, value=20, step=1)
+zscore_window = st.sidebar.number_input("Z-Score Window (Days)", min_value=5, max_value=100, value=20, step=1)
 entry_zscore = st.sidebar.number_input("Entry Z-Score Threshold", min_value=0.0, max_value=5.0, value=2.0, step=0.1)
 exit_zscore = st.sidebar.number_input("Exit Z-Score Threshold", min_value=0.0, max_value=5.0, value=0.5, step=0.1)
 
+# Validate Date Inputs
 if start_date >= end_date:
-  st.sidebar.error("End date must be after start date.")
+  st.sidebar.error("⚠️ **Start date must be before end date.**")
 
-# Fetch data
-with st.spinner("Fetching data..."):
+# Fetch Stock Data
+with st.spinner("🔄 Fetching stock data..."):
   stock1 = get_stock_data(ticker1, start_date, end_date)
   stock2 = get_stock_data(ticker2, start_date, end_date)
 
-# Combine into DataFrame
+# Stop execution if data fetching failed
+if stock1 is None or stock2 is None:
+  st.stop()
+
+# Combine Data into a DataFrame
 data = pd.DataFrame({ticker1: stock1, ticker2: stock2}).dropna()
 
 if data.empty:
-  st.error("No overlapping data between the selected dates. Please adjust the date range or tickers.")
+  st.error("❌ **No overlapping data between the selected dates.** Please adjust the date range or tickers.")
   st.stop()
 
-# Calculate spread and z-score
+# Calculate Spread and Z-Score
 data['Spread'] = data[ticker1] - data[ticker2]
-data['Z-Score'] = (data['Spread'] - data['Spread'].rolling(window=zscore_window).mean()) / data['Spread'].rolling(window=zscore_window).std()
+data['Spread_Mean'] = data['Spread'].rolling(window=zscore_window).mean()
+data['Spread_STD'] = data['Spread'].rolling(window=zscore_window).std()
+data['Z-Score'] = (data['Spread'] - data['Spread_Mean']) / data['Spread_STD']
 
-# Backtesting logic
+# Backtesting Logic
 def backtest_pairs(data, entry_threshold, exit_threshold):
   position = 0  # 1: Long Spread, -1: Short Spread, 0: No Position
   returns = []
@@ -93,91 +107,17 @@ def backtest_pairs(data, entry_threshold, exit_threshold):
   
   strategy_returns = pd.Series(returns, index=data.index)
   cumulative_strategy = (1 + strategy_returns).cumprod()
+  
   # Benchmark: Equal-weighted average of both stocks
   benchmark_returns = daily_returns.mean(axis=1)
   cumulative_buy_hold = (1 + benchmark_returns).cumprod()
   
   return strategy_returns, cumulative_strategy, cumulative_buy_hold, benchmark_returns
 
+# Execute Backtest
 strategy_returns, cumulative_strategy, cumulative_buy_hold, benchmark_returns = backtest_pairs(data, entry_zscore, exit_zscore)
 
-# Display data and plots
-st.header("Stock Prices")
-fig1, ax1 = plt.subplots(figsize=(14, 6))
-ax1.plot(data.index, data[ticker1], label=ticker1)
-ax1.plot(data.index, data[ticker2], label=ticker2)
-ax1.set_title("Adjusted Close Prices")
-ax1.set_xlabel("Date")
-ax1.set_ylabel("Price")
-ax1.legend()
-st.pyplot(fig1)
-
-st.header("Z-Score of Spread")
-fig2, ax2 = plt.subplots(figsize=(14, 4))
-ax2.plot(data.index, data['Z-Score'], label='Z-Score')
-ax2.axhline(entry_zscore, color='red', linestyle='--', label='Entry Threshold')
-ax2.axhline(-entry_zscore, color='red', linestyle='--')
-ax2.axhline(exit_zscore, color='green', linestyle='--', label='Exit Threshold')
-ax2.axhline(-exit_zscore, color='green', linestyle='--')
-ax2.set_title("Z-Score")
-ax2.set_xlabel("Date")
-ax2.set_ylabel("Z-Score")
-ax2.legend()
-st.pyplot(fig2)
-
-st.header("Strategy Performance")
-fig3, ax3 = plt.subplots(figsize=(14, 6))
-ax3.plot(cumulative_strategy.index, cumulative_strategy, label='Pairs Trading Strategy')
-ax3.plot(cumulative_buy_hold.index, cumulative_buy_hold, label='Buy and Hold (Average)')
-ax3.set_title("Cumulative Returns")
-ax3.set_xlabel("Date")
-ax3.set_ylabel("Cumulative Returns")
-ax3.legend()
-st.pyplot(fig3)
-
-# Display metrics
-st.header("Performance Metrics")
-
-def calculate_metrics(strategy_returns, benchmark_returns):
-  total_return = strategy_returns.sum()
-  annual_return = strategy_returns.mean() * 252
-  annual_vol = strategy_returns.std() * np.sqrt(252)
-  sharpe_ratio = annual_return / annual_vol if annual_vol != 0 else np.nan
-  max_drawdown = (cumulative_strategy / cumulative_strategy.cummax() - 1).min()
-  
-  benchmark_total = benchmark_returns.sum()
-  benchmark_annual = benchmark_returns.mean() * 252
-  benchmark_vol = benchmark_returns.std() * np.sqrt(252)
-  benchmark_sharpe = benchmark_annual / benchmark_vol if benchmark_vol !=0 else np.nan
-  benchmark_max_dd = (cumulative_buy_hold / cumulative_buy_hold.cummax() -1).min()
-  
-  metrics = {
-      "Strategy": {
-          "Total Return": f"{total_return:.2%}",
-          "Annualized Return": f"{annual_return:.2%}",
-          "Annualized Volatility": f"{annual_vol:.2%}",
-          "Sharpe Ratio": f"{sharpe_ratio:.2f}",
-          "Max Drawdown": f"{max_drawdown:.2%}",
-      },
-      "Benchmark (Equal-weighted Buy & Hold)": {
-          "Total Return": f"{benchmark_total:.2%}",
-          "Annualized Return": f"{benchmark_annual:.2%}",
-          "Annualized Volatility": f"{benchmark_vol:.2%}",
-          "Sharpe Ratio": f"{benchmark_sharpe:.2f}",
-          "Max Drawdown": f"{benchmark_max_dd:.2%}",
-      }
-  }
-  return metrics
-
-metrics = calculate_metrics(strategy_returns, benchmark_returns)
-
-# Create dataframe for metrics
-metrics_df = pd.DataFrame(metrics).T
-
-st.table(metrics_df)
-
-# Optional: Show trade signals
-st.header("Trade Signals")
+# Generate Trade Signals
 def generate_signals(data, entry_threshold, exit_threshold):
   position = 0
   signals = []
@@ -210,9 +150,214 @@ def generate_signals(data, entry_threshold, exit_threshold):
 data['Signal'] = generate_signals(data, entry_zscore, exit_zscore)
 signal_df = data[data['Signal'].notnull()][['Signal']]
 
+# Visualization with Plotly
+
+# 1. Stock Prices Plot
+st.header("📊 Stock Prices")
+fig_prices = make_subplots(rows=1, cols=1, shared_xaxes=True)
+
+fig_prices.add_trace(go.Scatter(
+  x=data.index,
+  y=data[ticker1],
+  mode='lines',
+  name=ticker1
+))
+
+fig_prices.add_trace(go.Scatter(
+  x=data.index,
+  y=data[ticker2],
+  mode='lines',
+  name=ticker2
+))
+
+fig_prices.update_layout(
+  title="Adjusted Close Prices",
+  xaxis_title="Date",
+  yaxis_title="Price (USD)",
+  hovermode='x unified',
+  width=1000,
+  height=600
+)
+
+st.plotly_chart(fig_prices, use_container_width=True)
+
+# 2. Z-Score with Trade Signals Plot
+st.header("📈 Z-Score of Spread with Trade Signals")
+
+fig_zscore = make_subplots(rows=1, cols=1, shared_xaxes=True)
+
+# Plot Z-Score
+fig_zscore.add_trace(go.Scatter(
+  x=data.index,
+  y=data['Z-Score'],
+  mode='lines',
+  name='Z-Score',
+  line=dict(color='blue')
+))
+
+# Plot Thresholds
+fig_zscore.add_trace(go.Scatter(
+  x=data.index,
+  y=[entry_zscore]*len(data),
+  mode='lines',
+  name='Entry Threshold',
+  line=dict(color='red', dash='dash')
+))
+fig_zscore.add_trace(go.Scatter(
+  x=data.index,
+  y=[-entry_zscore]*len(data),
+  mode='lines',
+  name='-Entry Threshold',
+  line=dict(color='red', dash='dash')
+))
+fig_zscore.add_trace(go.Scatter(
+  x=data.index,
+  y=[exit_zscore]*len(data),
+  mode='lines',
+  name='Exit Threshold',
+  line=dict(color='green', dash='dash')
+))
+fig_zscore.add_trace(go.Scatter(
+  x=data.index,
+  y=[-exit_zscore]*len(data),
+  mode='lines',
+  name='-Exit Threshold',
+  line=dict(color='green', dash='dash')
+))
+
+# Plot Trade Signals
+long_entries = data[data['Signal'] == 'Long Spread']
+short_entries = data[data['Signal'] == 'Short Spread']
+exit_long = data[data['Signal'] == 'Exit Long Spread']
+exit_short = data[data['Signal'] == 'Exit Short Spread']
+
+fig_zscore.add_trace(go.Scatter(
+  x=long_entries.index,
+  y=long_entries['Z-Score'],
+  mode='markers',
+  name='Long Entry',
+  marker=dict(symbol='triangle-up', color='green', size=12),
+  hovertemplate='Date: %{x}<br>Signal: Long Spread'
+))
+
+fig_zscore.add_trace(go.Scatter(
+  x=short_entries.index,
+  y=short_entries['Z-Score'],
+  mode='markers',
+  name='Short Entry',
+  marker=dict(symbol='triangle-down', color='red', size=12),
+  hovertemplate='Date: %{x}<br>Signal: Short Spread'
+))
+
+fig_zscore.add_trace(go.Scatter(
+  x=exit_long.index,
+  y=exit_long['Z-Score'],
+  mode='markers',
+  name='Long Exit',
+  marker=dict(symbol='circle', color='blue', size=12, line=dict(width=2)),
+  hovertemplate='Date: %{x}<br>Signal: Exit Long Spread'
+))
+
+fig_zscore.add_trace(go.Scatter(
+  x=exit_short.index,
+  y=exit_short['Z-Score'],
+  mode='markers',
+  name='Short Exit',
+  marker=dict(symbol='circle', color='orange', size=12, line=dict(width=2)),
+  hovertemplate='Date: %{x}<br>Signal: Exit Short Spread'
+))
+
+fig_zscore.update_layout(
+  title="Z-Score of Spread with Trade Signals",
+  xaxis_title="Date",
+  yaxis_title="Z-Score",
+  hovermode='x unified',
+  width=1000,
+  height=600
+)
+
+st.plotly_chart(fig_zscore, use_container_width=True)
+
+# 3. Cumulative Returns Plot
+st.header("📈 Strategy vs. Benchmark Cumulative Returns")
+
+fig_cum_returns = make_subplots(rows=1, cols=1, shared_xaxes=True)
+
+fig_cum_returns.add_trace(go.Scatter(
+  x=cumulative_strategy.index,
+  y=cumulative_strategy,
+  mode='lines',
+  name='Pairs Trading Strategy',
+  line=dict(color='purple')
+))
+
+fig_cum_returns.add_trace(go.Scatter(
+  x=cumulative_buy_hold.index,
+  y=cumulative_buy_hold,
+  mode='lines',
+  name='Benchmark (Equal-weighted Buy & Hold)',
+  line=dict(color='grey')
+))
+
+fig_cum_returns.update_layout(
+  title="Cumulative Returns",
+  xaxis_title="Date",
+  yaxis_title="Cumulative Returns",
+  hovermode='x unified',
+  width=1000,
+  height=600
+)
+
+st.plotly_chart(fig_cum_returns, use_container_width=True)
+
+# Performance Metrics
+st.header("📊 Performance Metrics")
+
+def calculate_metrics(strategy_returns, benchmark_returns, cumulative_strategy, cumulative_buy_hold):
+  # Strategy Metrics
+  total_return = cumulative_strategy.iloc[-1] - 1
+  annual_return = strategy_returns.mean() * 252
+  annual_vol = strategy_returns.std() * np.sqrt(252)
+  sharpe_ratio = annual_return / annual_vol if annual_vol != 0 else np.nan
+  max_drawdown = (cumulative_strategy / cumulative_strategy.cummax() - 1).min()
+  
+  # Benchmark Metrics
+  benchmark_total = cumulative_buy_hold.iloc[-1] - 1
+  benchmark_annual = benchmark_returns.mean() * 252
+  benchmark_vol = benchmark_returns.std() * np.sqrt(252)
+  benchmark_sharpe = benchmark_annual / benchmark_vol if benchmark_vol != 0 else np.nan
+  benchmark_max_dd = (cumulative_buy_hold / cumulative_buy_hold.cummax() -1).min()
+  
+  metrics = {
+      "Strategy": {
+          "Total Return": f"{total_return:.2%}",
+          "Annualized Return": f"{annual_return:.2%}",
+          "Annualized Volatility": f"{annual_vol:.2%}",
+          "Sharpe Ratio": f"{sharpe_ratio:.2f}",
+          "Max Drawdown": f"{max_drawdown:.2%}",
+      },
+      "Benchmark (Equal-weighted Buy & Hold)": {
+          "Total Return": f"{benchmark_total:.2%}",
+          "Annualized Return": f"{benchmark_annual:.2%}",
+          "Annualized Volatility": f"{benchmark_vol:.2%}",
+          "Sharpe Ratio": f"{benchmark_sharpe:.2f}",
+          "Max Drawdown": f"{benchmark_max_dd:.2%}",
+      }
+  }
+  return metrics
+
+# Calculate Metrics
+metrics = calculate_metrics(strategy_returns, benchmark_returns, cumulative_strategy, cumulative_buy_hold)
+
+# Display Metrics in a Table
+metrics_df = pd.DataFrame(metrics).T
+st.table(metrics_df)
+
+# Trade Signals Table
+st.header("📋 Trade Signals")
 st.write(signal_df)
 
-# Footer
+# Footer Disclaimer
 st.markdown("""
 ---
 **Disclaimer:** This tool is for educational purposes only and should not be considered as financial advice. Always do your own research before making investment decisions.
