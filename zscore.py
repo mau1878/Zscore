@@ -186,9 +186,9 @@ def generate_signals_adaptive(weights_df):
       w_cash = row['Weight_Cash']
 
       signal = None
-      percentage_change_t1 = ((w_t1 - prev_w_t1) / prev_w_t1 * 100) if prev_w_t1 != 0 else 0
-      percentage_change_t2 = ((w_t2 - prev_w_t2) / prev_w_t2 * 100) if prev_w_t2 != 0 else 0
-      percentage_change_cash = ((w_cash - prev_w_cash) / prev_w_cash * 100) if prev_w_cash != 0 else 0
+      percentage_change_t1 = ((w_t1 - prev_w_t1) / prev_w_t1 * 100) if prev_w_t1 > 0 else (100 if w_t1 > 0 else 0)
+      percentage_change_t2 = ((w_t2 - prev_w_t2) / prev_w_t2 * 100) if prev_w_t2 > 0 else (100 if w_t2 > 0 else 0)
+      percentage_change_cash = ((w_cash - prev_w_cash) / prev_w_cash * 100) if prev_w_cash > 0 else (100 if w_cash > 0 else 0)
 
       if w_t1 > prev_w_t1:
           signal = f'Aumentar {ticker1} ({percentage_change_t1:.2f}%)'
@@ -205,6 +205,7 @@ def generate_signals_adaptive(weights_df):
       prev_w_t1, prev_w_t2, prev_w_cash = w_t1, w_t2, w_cash
 
   return signals
+
 
 data['Signal'] = generate_signals_adaptive(weights_df)
 signal_df = data[['Signal']].dropna()
