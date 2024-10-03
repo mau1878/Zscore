@@ -115,6 +115,9 @@ def backtest_pairs_adaptive(data, entry_threshold, exit_threshold, max_alloc):
   for i in range(len(data)):
       z = data['Z-Score'].iloc[i]
 
+      # Debugging: Print the z-score and thresholds
+      print(f"Date: {data.index[i]}, Z-Score: {z}, Entry Threshold: {entry_threshold}, Exit Threshold: {exit_threshold}")
+
       # Calculate allocation weights based on z-score
       z_abs = abs(z)
       if z_abs >= entry_threshold:
@@ -135,6 +138,9 @@ def backtest_pairs_adaptive(data, entry_threshold, exit_threshold, max_alloc):
           w_t1 = 0
           w_t2 = 0
           w_cash = 1
+
+      # Debugging: Print the weights
+      print(f"Weights - {ticker1}: {w_t1}, {ticker2}: {w_t2}, Cash: {w_cash}")
 
       # Record weights
       weights_t1.append(w_t1)
@@ -163,6 +169,7 @@ def backtest_pairs_adaptive(data, entry_threshold, exit_threshold, max_alloc):
   }, index=data.index)
 
   return strategy_returns, cumulative_strategy, cumulative_benchmark, benchmark_returns, weights_df
+
 
 # Execute Backtest
 results = backtest_pairs_adaptive(
