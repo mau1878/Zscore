@@ -154,6 +154,7 @@ if strategy_type == "Trading de Pares":
   # Lógica de Backtesting con Posición en Efectivo y Asignación Avanzada (Sin Venta en Corto)
   # Lógica de Backtesting con Posición en Efectivo y Asignación Avanzada (Sin Venta en Corto)
   # Lógica de Backtesting con Posición en Efectivo y Asignación Avanzada (Sin Venta en Corto)
+# Lógica de Backtesting con Posición en Efectivo y Asignación Avanzada (Sin Venta en Corto)
   def backtest_pairs_adaptive_no_short(data, ticker1, ticker2, entry_threshold, exit_threshold, max_alloc):
       # Inicializar asignaciones
       allocations = pd.DataFrame(index=data.index, columns=['Weight_' + ticker1, 'Weight_' + ticker2, 'Weight_Cash'])
@@ -196,11 +197,25 @@ if strategy_type == "Trading de Pares":
     
       # Calcular retornos diarios del portafolio
       daily_returns = data[[ticker1, ticker2]].pct_change().fillna(0)
+      
+      # Debugging: Print daily returns
+      st.write("Daily Returns:")
+      st.write(daily_returns)
+    
       strategy_returns = (allocations.shift(1) * daily_returns).sum(axis=1)  # Usar shift para evitar look-ahead bias
+      
+      # Debugging: Print strategy returns
+      st.write("Strategy Returns:")
+      st.write(strategy_returns)
+    
       strategy_returns.fillna(0, inplace=True)  # Asegurarse de que no haya NaN en los retornos
     
       # Calcular retornos acumulados
       cumulative_strategy = (1 + strategy_returns).cumprod()  # Cálculo correcto de retornos acumulados
+    
+      # Debugging: Print cumulative strategy returns
+      st.write("Cumulative Strategy Returns:")
+      st.write(cumulative_strategy)
     
       # Benchmark: Portafolio igual ponderado mantenido constantemente
       benchmark_weights = np.array([0.5, 0.5])
