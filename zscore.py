@@ -175,29 +175,21 @@ if strategy_type == "Trading de Pares":
   # Generate Trade Signals for Display
   def generate_signals_adaptive(weights_df):
       signals = []
-      prev_w_t1 = 0
-      prev_w_t2 = 0
-      prev_w_cash = 1
+      prev_signal = None  # Track the last signal
 
       for idx, row in weights_df.iterrows():
           w_t1 = row['Weight_' + ticker1]
           w_t2 = row['Weight_' + ticker2]
-          w_cash = row['Weight_Cash']
 
-          signal = None
-          if w_t1 > prev_w_t1:
-              signal = f'Aumentar {ticker1} ({(w_t1 - prev_w_t1) * 100:.2f}%)'
-          elif w_t2 > prev_w_t2:
-              signal = f'Aumentar {ticker2} ({(w_t2 - prev_w_t2) * 100:.2f}%)'
-          elif w_cash > prev_w_cash:
-              signal = 'Aumentar Posición en Efectivo'
-          elif w_t1 < prev_w_t1:
-              signal = f'Disminuir {ticker1} ({(prev_w_t1 - w_t1) * 100:.2f}%)'
-          elif w_t2 < prev_w_t2:
-              signal = f'Disminuir {ticker2} ({(prev_w_t2 - w_t2) * 100:.2f}%)'
-
-          signals.append(signal)
-          prev_w_t1, prev_w_t2, prev_w_cash = w_t1, w_t2, w_cash
+          # Determine the current signal based on weights
+          if w_t1 > 0 and (prev_signal != 'Comprar'):
+              signals.append('Comprar')
+              prev_signal = 'Comprar'
+          elif w_t2 > 0 and (prev_signal != 'Vender'):
+              signals.append('Vender')
+              prev_signal = 'Vender'
+          else:
+              signals.append('Mantener')  # No change
 
       return signals
 
@@ -387,7 +379,7 @@ if strategy_type == "Trading de Pares":
 
   st.plotly_chart(fig_cum_returns, use_container_width=True)
 
-  # Performance Metrics for Single Stock Strategy
+  # Performance Metrics
   st.header("📊 Métricas de Rendimiento")
   st.markdown("""
   La tabla a continuación resume las métricas clave de rendimiento para la estrategia adaptativa y el benchmark.
@@ -441,88 +433,230 @@ if strategy_type == "Trading de Pares":
   st.write(signal_df.dropna())
 
 elif strategy_type == "Estrategia de Acción Única":
-  # Single Stock Strategy Section
+  # User Inputs for single stock strategy
   single_ticker = st.sidebar.text_input("Símbolo de la Acción", value=default_ticker1).upper()
-  single_start_date = st.sidebar.date_input("Fecha de Inicio", value=datetime(2020, 1, 1))
-  single_end_date = st.sidebar.date_input("Fecha de Fin", value=datetime.today())
+
+  start_date = st.sidebar.date_input("Fecha de Inicio", value=datetime(2020, 1, 1))
+  end_date = st.sidebar.date_input("Fecha de Fin", value=datetime.today())
+
+  zscore_window = st.sidebar.number_input("Ventana de Z-Score (Días)", min_value=5, max_value=252, value=30, step=1)
+  entry_zscore = st.sidebar.number_input("Umbral de Entrada (Z-Score)", min_value=0.1, max_value=3.0, value=1.0, step=0.1)
+  exit_zscore = st.sidebar.number_input("Umbral de Salida (Z-Score)", min_value=0.0, max_value=2.0, value=0.5, step=0.1)
 
   # Validate Date Inputs
-  if single_start_date >= single_end_date:
+  if start_date >= end_date:
       st.sidebar.error("⚠️ **La fecha de inicio debe ser anterior a la fecha de fin.**")
 
-  # Fetch Single Stock Data
+  # Fetch Stock Data for Single Stock
   with st.spinner("🔄 Obteniendo datos de la acción..."):
-      single_stock = get_stock_data(single_ticker, single_start_date, single_end_date)
+      single_stock_data = get_stock_data(single_ticker, start_date, end_date)
 
   # Stop execution if data fetching failed
-  if single_stock is None:
+  if single_stock_data is None:
       st.stop()
 
-  # Create DataFrame for Single Stock
-  single_data = pd.DataFrame(single_stock).dropna()
+  # Prepare DataFrame for single stock
+  single_stock_df = pd.DataFrame(single_stock_data).dropna()
+  single_stock_df = single_stock_df.reset_index()  # Reset index to have a date column
 
-  if single_data.empty:
-      st.error("❌ **No hay datos para la acción seleccionada.** Por favor, ajusta el rango de fechas o el símbolo de la acción.")
-      st.stop()
+  # Generate Signals for Single Stock
+  def generate_signals_single_stock(stock_data, zscore_window, entry_threshold, exit_threshold):
+      # Calculate Z-Score
+      stock_data['Mean'] = stock_data['Adj Close'].rolling(window=zscore_window).mean()
+      stock_data['STD'] = stock_data['Adj Close'].rolling(window=zscore_window).std()
+      stock_data['Z-Score'] = (stock_data['Adj Close'] - stock_data['Mean']) / stock_data['STD']
+
+      signals = []
+      prev_signal = None  # Track the last signal
+
+      for z in stock_data['Z-Score']:
+          if z >= entry_threshold and prev_signal != 'Comprar':
+              signals.append('Comprar')
+              prev_signal = 'Comprar'
+          elif z <= -entry_threshold and prev_signal != 'Vender':
+              signals.append('Vender')
+              prev_signal = 'Vender'
+          else:
+              signals.append('Mantener')  # No change
+
+      stock_data['Signal'] = signals
+      return stock_data[['Adj Close', 'Z-Score', 'Signal']]
+
+  # Generate signals for the single stock
+  single_stock_signals = generate_signals_single_stock(single_stock_df, zscore_window, entry_zscore, exit_zscore)
+
+  # Display the signals
+  st.header(f"📈 Señales para {single_ticker}")
+  st.write(single_stock_signals)
 
   # Visualization for Single Stock
-  st.header("📊 Precios de la Acción")
-  st.markdown("""
-  Este gráfico muestra los precios de cierre ajustados de la acción seleccionada a lo largo del período elegido.
-  """)
-  fig_single_prices = go.Figure()
-
-  fig_single_prices.add_trace(go.Scatter(
-      x=single_data.index,
-      y=single_data[single_ticker],
+  st.header("📊 Gráficos para la Acción Única")
+  
+  # 1. Adjusted Close Price Plot
+  st.subheader("📈 Precio Ajustado de la Acción")
+  fig_price = go.Figure()
+  fig_price.add_trace(go.Scatter(
+      x=single_stock_df['Date'],
+      y=single_stock_df['Adj Close'],
       mode='lines',
-      name=single_ticker
+      name='Precio Ajustado'
+  ))
+  fig_price.update_layout(
+      title=f"Precio Ajustado de {single_ticker}",
+      xaxis_title="Fecha",
+      yaxis_title="Precio Ajustado",
+      hovermode='x unified'
+  )
+  st.plotly_chart(fig_price, use_container_width=True)
+
+  # 2. Z-Score Plot with Buy/Sell Signals
+  st.subheader("📈 Z-Score de la Acción con Señales de Compra/Venta")
+  fig_zscore_single = go.Figure()
+  fig_zscore_single.add_trace(go.Scatter(
+      x=single_stock_df['Date'],
+      y=single_stock_df['Z-Score'],
+      mode='lines',
+      name='Z-Score',
+      line=dict(color='blue')
+  ))
+  fig_zscore_single.add_trace(go.Scatter(
+      x=single_stock_df['Date'],
+      y=[entry_zscore]*len(single_stock_df),
+      mode='lines',
+      name='Umbral de Entrada',
+      line=dict(color='red', dash='dash')
+  ))
+  fig_zscore_single.add_trace(go.Scatter(
+      x=single_stock_df['Date'],
+      y=[-entry_zscore]*len(single_stock_df),
+      mode='lines',
+      name='-Umbral de Entrada',
+      line=dict(color='red', dash='dash')
+  ))
+  fig_zscore_single.add_trace(go.Scatter(
+      x=single_stock_df['Date'],
+      y=[exit_zscore]*len(single_stock_df),
+      mode='lines',
+      name='Umbral de Salida',
+      line=dict(color='green', dash='dash')
+  ))
+  fig_zscore_single.add_trace(go.Scatter(
+      x=single_stock_df['Date'],
+      y=[-exit_zscore]*len(single_stock_df),
+      mode='lines',
+      name='-Umbral de Salida',
+      line=dict(color='green', dash='dash')
   ))
 
-  fig_single_prices.update_layout(
-      title=f"Precios de Cierre Ajustados - {single_ticker}",
+  # Add Buy and Sell Signals
+  buy_signals = single_stock_df[single_stock_df['Signal'] == 'Comprar']
+  sell_signals = single_stock_df[single_stock_df['Signal'] == 'Vender']
+  
+  fig_zscore_single.add_trace(go.Scatter(
+      x=buy_signals['Date'],
+      y=buy_signals['Z-Score'],
+      mode='markers',
+      name='Señales de Compra',
+      marker=dict(symbol='triangle-up', color='green', size=10),
+      hovertemplate='Fecha: %{x}<br>Señal: Comprar'
+  ))
+  
+  fig_zscore_single.add_trace(go.Scatter(
+      x=sell_signals['Date'],
+      y=sell_signals['Z-Score'],
+      mode='markers',
+      name='Señales de Venta',
+      marker=dict(symbol='triangle-down', color='red', size=10),
+      hovertemplate='Fecha: %{x}<br>Señal: Vender'
+  ))
+
+  fig_zscore_single.update_layout(
+      title=f"Z-Score de {single_ticker} con Señales de Compra/Venta",
       xaxis_title="Fecha",
-      yaxis_title="Precio",
-      hovermode='x unified',
-      width=1000,
-      height=500
+      yaxis_title="Z-Score",
+      hovermode='x unified'
   )
+  st.plotly_chart(fig_zscore_single, use_container_width=True)
 
-  st.plotly_chart(fig_single_prices, use_container_width=True)
-
-  # Performance Metrics for Single Stock Strategy
-  st.header("📊 Métricas de Rendimiento")
+  # 3. Asignación de Portafolio a lo Largo del Tiempo
+  st.header("📈 Asignación de Portafolio a lo Largo del Tiempo")
   st.markdown("""
-  La tabla a continuación resume las métricas clave de rendimiento para la acción seleccionada.
+  Este gráfico muestra cómo cambian las asignaciones del portafolio a la acción y a efectivo a lo largo del tiempo, basándose en las señales del z-score.
   """)
 
-  single_returns = single_data[single_ticker].pct_change().dropna()
-  cumulative_single = (1 + single_returns).cumprod()
+  # Calculate Portfolio Allocation
+  single_stock_df['Weight'] = np.where(single_stock_df['Signal'] == 'Comprar', 1, 0)  # 100% in stock when buying
+  single_stock_df['Weight'] = np.where(single_stock_df['Signal'] == 'Vender', 0, single_stock_df['Weight'])  # 0% when selling
+  single_stock_df['Weight'] = single_stock_df['Weight'].ffill().fillna(0)  # Forward fill to maintain position
 
-  def calculate_single_metrics(single_returns, cumulative_single):
-      total_return = cumulative_single.iloc[-1] - 1
-      annual_return = single_returns.mean() * 252
-      annual_vol = single_returns.std() * np.sqrt(252)
-      sharpe_ratio = annual_return / annual_vol if annual_vol != 0 else np.nan
-      max_drawdown = (cumulative_single / cumulative_single.cummax() - 1).min()
+  fig_alloc = go.Figure()
+  fig_alloc.add_trace(go.Scatter(
+      x=single_stock_df['Date'],
+      y=single_stock_df['Weight'],
+      mode='lines',
+      name='Asignación a ' + single_ticker,
+      line=dict(color='blue')
+  ))
 
-      metrics = {
-          "Acción Única": {
-              "Rendimiento Total": f"{total_return:.2%}",
-              "Rendimiento Anualizado": f"{annual_return:.2%}",
-              "Volatilidad Anualizada": f"{annual_vol:.2%}",
-              "Ratio de Sharpe": f"{sharpe_ratio:.2f}",
-              "Máxima Caída": f"{max_drawdown:.2%}",
-          }
-      }
-      return metrics
+  fig_alloc.update_layout(
+      title="Asignación de Portafolio a lo Largo del Tiempo",
+      xaxis_title="Fecha",
+      yaxis_title="Porcentaje de Asignación",
+      yaxis=dict(range=[0, 1]),
+      hovermode='x unified'
+  )
 
-  # Calculate Metrics
-  single_metrics = calculate_single_metrics(single_returns, cumulative_single)
+  st.plotly_chart(fig_alloc, use_container_width=True)
 
-  # Display Metrics in a Table
-  single_metrics_df = pd.DataFrame(single_metrics).T
-  st.table(single_metrics_df)
+  # 4. Cumulative Returns Plot
+  st.header("📈 Rendimiento Acumulado de la Estrategia")
+  st.markdown("""
+  Este gráfico compara los rendimientos acumulados de la estrategia de trading contra un benchmark de compra y mantenimiento.
+  """)
+
+  # Calculate Buy and Hold Returns
+  single_stock_df['Buy_Hold_Returns'] = single_stock_df['Adj Close'] / single_stock_df['Adj Close'].iloc[0] - 1
+
+  # Calculate Trading Strategy Returns
+  trading_returns = []
+  position = 0  # 1 for holding the stock, 0 for not holding
+  for i in range(len(single_stock_df)):
+      if single_stock_df['Signal'].iloc[i] == 'Comprar':
+          position = 1  # Buy
+      elif single_stock_df['Signal'].iloc[i] == 'Vender':
+          position = 0  # Sell
+
+      if position == 1:
+          trading_returns.append(single_stock_df['Adj Close'].iloc[i] / single_stock_df['Adj Close'].iloc[0] - 1)
+      else:
+          trading_returns.append(trading_returns[-1] if trading_returns else 0)  # Hold previous return
+
+  single_stock_df['Trading_Returns'] = trading_returns
+
+  # Create the comparison figure
+  fig_comparison = go.Figure()
+  fig_comparison.add_trace(go.Scatter(
+      x=single_stock_df['Date'],
+      y=single_stock_df['Buy_Hold_Returns'],
+      mode='lines',
+      name='Compra y Mantenimiento',
+      line=dict(color='blue')
+  ))
+  fig_comparison.add_trace(go.Scatter(
+      x=single_stock_df['Date'],
+      y=single_stock_df['Trading_Returns'],
+      mode='lines',
+      name='Estrategia de Trading',
+      line=dict(color='purple')
+  ))
+
+  fig_comparison.update_layout(
+      title=f"Comparación de Estrategia de Compra y Mantenimiento vs Estrategia de Trading para {single_ticker}",
+      xaxis_title="Fecha",
+      yaxis_title="Rendimiento Acumulado",
+      hovermode='x unified'
+  )
+  st.plotly_chart(fig_comparison, use_container_width=True)
 
 # Footer Disclaimer
 st.markdown("""
