@@ -153,8 +153,9 @@ if strategy_type == "Trading de Pares":
 
   # Lógica de Backtesting con Posición en Efectivo y Asignación Avanzada (Sin Venta en Corto)
   # Lógica de Backtesting con Posición en Efectivo y Asignación Avanzada (Sin Venta en Corto)
+  # Lógica de Backtesting con Posición en Efectivo y Asignación Avanzada (Sin Venta en Corto)
   def backtest_pairs_adaptive_no_short(data, ticker1, ticker2, entry_threshold, exit_threshold, max_alloc):
-    # Inicializar asignaciones
+      # Inicializar asignaciones
       allocations = pd.DataFrame(index=data.index, columns=['Weight_' + ticker1, 'Weight_' + ticker2, 'Weight_Cash'])
       allocations.iloc[:] = 0  # Comenzar con todo en efectivo
     
