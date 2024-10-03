@@ -440,6 +440,90 @@ if strategy_type == "Trading de Pares":
   """)
   st.write(signal_df.dropna())
 
+elif strategy_type == "Estrategia de Acción Única":
+  # Single Stock Strategy Section
+  single_ticker = st.sidebar.text_input("Símbolo de la Acción", value=default_ticker1).upper()
+  single_start_date = st.sidebar.date_input("Fecha de Inicio", value=datetime(2020, 1, 1))
+  single_end_date = st.sidebar.date_input("Fecha de Fin", value=datetime.today())
+
+  # Validate Date Inputs
+  if single_start_date >= single_end_date:
+      st.sidebar.error("⚠️ **La fecha de inicio debe ser anterior a la fecha de fin.**")
+
+  # Fetch Single Stock Data
+  with st.spinner("🔄 Obteniendo datos de la acción..."):
+      single_stock = get_stock_data(single_ticker, single_start_date, single_end_date)
+
+  # Stop execution if data fetching failed
+  if single_stock is None:
+      st.stop()
+
+  # Create DataFrame for Single Stock
+  single_data = pd.DataFrame(single_stock).dropna()
+
+  if single_data.empty:
+      st.error("❌ **No hay datos para la acción seleccionada.** Por favor, ajusta el rango de fechas o el símbolo de la acción.")
+      st.stop()
+
+  # Visualization for Single Stock
+  st.header("📊 Precios de la Acción")
+  st.markdown("""
+  Este gráfico muestra los precios de cierre ajustados de la acción seleccionada a lo largo del período elegido.
+  """)
+  fig_single_prices = go.Figure()
+
+  fig_single_prices.add_trace(go.Scatter(
+      x=single_data.index,
+      y=single_data[single_ticker],
+      mode='lines',
+      name=single_ticker
+  ))
+
+  fig_single_prices.update_layout(
+      title=f"Precios de Cierre Ajustados - {single_ticker}",
+      xaxis_title="Fecha",
+      yaxis_title="Precio",
+      hovermode='x unified',
+      width=1000,
+      height=500
+  )
+
+  st.plotly_chart(fig_single_prices, use_container_width=True)
+
+  # Performance Metrics for Single Stock Strategy
+  st.header("📊 Métricas de Rendimiento")
+  st.markdown("""
+  La tabla a continuación resume las métricas clave de rendimiento para la acción seleccionada.
+  """)
+
+  single_returns = single_data[single_ticker].pct_change().dropna()
+  cumulative_single = (1 + single_returns).cumprod()
+
+  def calculate_single_metrics(single_returns, cumulative_single):
+      total_return = cumulative_single.iloc[-1] - 1
+      annual_return = single_returns.mean() * 252
+      annual_vol = single_returns.std() * np.sqrt(252)
+      sharpe_ratio = annual_return / annual_vol if annual_vol != 0 else np.nan
+      max_drawdown = (cumulative_single / cumulative_single.cummax() - 1).min()
+
+      metrics = {
+          "Acción Única": {
+              "Rendimiento Total": f"{total_return:.2%}",
+              "Rendimiento Anualizado": f"{annual_return:.2%}",
+              "Volatilidad Anualizada": f"{annual_vol:.2%}",
+              "Ratio de Sharpe": f"{sharpe_ratio:.2f}",
+              "Máxima Caída": f"{max_drawdown:.2%}",
+          }
+      }
+      return metrics
+
+  # Calculate Metrics
+  single_metrics = calculate_single_metrics(single_returns, cumulative_single)
+
+  # Display Metrics in a Table
+  single_metrics_df = pd.DataFrame(single_metrics).T
+  st.table(single_metrics_df)
+
 # Footer Disclaimer
 st.markdown("""
 ---
