@@ -51,7 +51,7 @@ def get_stock_data(ticker, start, end):
           st.error(f"No se pudo obtener datos para `{ticker}`. Por favor, verifica el símbolo de la acción.")
           return None
       data = data['Adj Close'].dropna()
-      data.name = ticker
+      data.name = 'Adj_Close'  # Rename the series to 'Adj_Close'
       return data
   except Exception as e:
       st.error(f"Error al obtener datos para `{ticker}`: {e}")
@@ -146,8 +146,8 @@ if strategy_type == "Trading de Pares":
   data['Spread_STD'] = data['Spread'].rolling(window=zscore_window, min_periods=1).std()
   data['Z-Score'] = (data['Spread'] - data['Spread_Mean']) / data['Spread_STD']
 
-  # Backtesting Logic with Cash Position and Advanced Allocation
-  def backtest_pairs_adaptive(data, entry_threshold, exit_threshold, max_alloc):
+  # Backtesting Logic with Cash Position and Advanced Allocation (No Short Selling)
+  def backtest_pairs_adaptive_no_short(data, entry_threshold, exit_threshold, max_alloc):
       # Initialize allocations
       allocations = pd.DataFrame(index=data.index, columns=['Weight_' + ticker1, 'Weight_' + ticker2, 'Weight_Cash'])
       allocations.iloc[:] = 0  # Start with all cash
@@ -158,26 +158,26 @@ if strategy_type == "Trading de Pares":
 
       # Signals
       data['Signal'] = None
-      current_position = None  # None, 'Long Spread', 'Short Spread'
+      current_position = None  # None, 'Overweight ' ticker1', 'Overweight ' ticker2'
 
       for i in range(len(data)):
           if entry_condition.iloc[i]:
               z = data['Z-Score'].iloc[i]
-              if z > 0 and current_position != 'Short Spread':
-                  # Short Spread: Short ticker1, Long ticker2
-                  allocations.iloc[i] = [-(max_alloc / 2), (max_alloc / 2), 1 - max_alloc]
-                  data['Signal'].iloc[i] = 'Short Spread'
-                  current_position = 'Short Spread'
-              elif z < 0 and current_position != 'Long Spread':
-                  # Long Spread: Long ticker1, Short ticker2
-                  allocations.iloc[i] = [(max_alloc / 2), -(max_alloc / 2), 1 - max_alloc]
-                  data['Signal'].iloc[i] = 'Long Spread'
-                  current_position = 'Long Spread'
+              if z > 0 and current_position != f'Overweight {ticker2}':
+                  # Overweight ticker2, Underweight ticker1
+                  allocations.iloc[i] = [(1 - max_alloc), max_alloc, 0]  # No short, adjust allocations
+                  data['Signal'].iloc[i] = f'Overweight {ticker2}'
+                  current_position = f'Overweight {ticker2}'
+              elif z < 0 and current_position != f'Overweight {ticker1}':
+                  # Overweight ticker1, Underweight ticker2
+                  allocations.iloc[i] = [max_alloc, (1 - max_alloc), 0]
+                  data['Signal'].iloc[i] = f'Overweight {ticker1}'
+                  current_position = f'Overweight {ticker1}'
           elif exit_condition.iloc[i]:
               # Exit to Cash
               allocations.iloc[i] = [0, 0, 1]
               if current_position is not None:
-                  data['Signal'].iloc[i] = 'Exit'
+                  data['Signal'].iloc[i] = 'Exit to Cash'
                   current_position = None
           else:
               if i > 0:
@@ -201,7 +201,7 @@ if strategy_type == "Trading de Pares":
       return strategy_returns, cumulative_strategy, cumulative_benchmark, benchmark_returns, allocations
 
   # Execute Backtest
-  strategy_returns, cumulative_strategy, cumulative_benchmark, benchmark_returns, allocations = backtest_pairs_adaptive(
+  strategy_returns, cumulative_strategy, cumulative_benchmark, benchmark_returns, allocations = backtest_pairs_adaptive_no_short(
       data, entry_zscore, exit_zscore, max_allocation
   )
 
@@ -307,30 +307,21 @@ if strategy_type == "Trading de Pares":
   # Plot Trade Signals
   signals = data[['Signal']].dropna()
   for idx, row in signals.iterrows():
-      if row['Signal'] == 'Long Spread':
+      if 'Overweight' in row['Signal']:
           fig_zscore.add_trace(go.Scatter(
               x=[idx],
               y=[data.loc[idx, 'Z-Score']],
               mode='markers',
-              name='Long Spread',
+              name=row['Signal'],
               marker=dict(symbol='triangle-up', color='green', size=12),
               showlegend=False
           ))
-      elif row['Signal'] == 'Short Spread':
+      elif row['Signal'] == 'Exit to Cash':
           fig_zscore.add_trace(go.Scatter(
               x=[idx],
               y=[data.loc[idx, 'Z-Score']],
               mode='markers',
-              name='Short Spread',
-              marker=dict(symbol='triangle-down', color='red', size=12),
-              showlegend=False
-          ))
-      elif row['Signal'] == 'Exit':
-          fig_zscore.add_trace(go.Scatter(
-              x=[idx],
-              y=[data.loc[idx, 'Z-Score']],
-              mode='markers',
-              name='Exit',
+              name='Exit to Cash',
               marker=dict(symbol='circle', color='black', size=8),
               showlegend=False
           ))
@@ -452,8 +443,7 @@ elif strategy_type == "Estrategia de Acción Única":
 
   # Prepare DataFrame for single stock
   single_stock_df = pd.DataFrame(single_stock_data).reset_index()
-  single_stock_df.rename(columns={'Adj Close': 'Adj_Close'}, inplace=True)
-  single_stock_df.dropna(inplace=True)
+  single_stock_df.rename(columns={'Adj_Close': 'Adj_Close'}, inplace=True)  # Already named correctly
 
   # Generate Signals for Single Stock
   def generate_signals_single_stock(df, z_window, entry_thresh, exit_thresh):
@@ -461,29 +451,29 @@ elif strategy_type == "Estrategia de Acción Única":
       df['STD'] = df['Adj_Close'].rolling(window=z_window, min_periods=1).std()
       df['Z-Score'] = (df['Adj_Close'] - df['Mean']) / df['STD']
 
+      # Initialize Signal and Position
       df['Signal'] = 'Mantener'
-      position = 0  # 1 for holding the stock, 0 for not holding
+      position = 0  # 1 for holding the stock, 0 for holding cash
 
       for i in range(len(df)):
           z = df['Z-Score'].iloc[i]
-          if z >= entry_thresh and position == 0:
-              df.at[i, 'Signal'] = 'Comprar'
-              position = 1
-          elif z <= -entry_thresh and position == 0:
-              df.at[i, 'Signal'] = 'Comprar'
-              position = 1
-          elif z <= exit_thresh and position == 1:
-              df.at[i, 'Signal'] = 'Vender'
-              position = 0
-          elif z >= -exit_thresh and position == 1:
-              df.at[i, 'Signal'] = 'Vender'
-
+          if position == 0:
+              if z >= entry_thresh:
+                  df.at[i, 'Signal'] = 'Comprar'
+                  position = 1
+              elif z <= -entry_thresh:
+                  df.at[i, 'Signal'] = 'Comprar'
+                  position = 1
+          elif position == 1:
+              if abs(z) <= exit_thresh:
+                  df.at[i, 'Signal'] = 'Vender'
+                  position = 0
       return df
 
   # Generate signals for the single stock
   single_stock_df = generate_signals_single_stock(single_stock_df, zscore_window, entry_zscore, exit_zscore)
 
-  # Calculate Positions
+  # Calculate Positions (No Short Selling)
   single_stock_df['Position'] = 0
   single_stock_df['Position'] = np.where(single_stock_df['Signal'] == 'Comprar', 1, single_stock_df['Position'])
   single_stock_df['Position'] = np.where(single_stock_df['Signal'] == 'Vender', 0, single_stock_df['Position'])
