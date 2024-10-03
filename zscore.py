@@ -25,9 +25,9 @@ Esta herramienta te permite realizar un back-testing de una estrategia de tradin
 
 1. **Selecciona dos acciones:** Elige dos acciones que creas que están correlacionadas o que históricamente se han movido juntas.
 2. **Configura los parámetros:**
- - **Ventana de Z-Score:** El número de días para calcular la media móvil y la desviación estándar del spread de precios.
- - **Umbrales de Entrada/Salida:** Los niveles de z-score en los que la estrategia ajustará las asignaciones.
- - **Asignación Máxima (%):** El porcentaje máximo del portafolio que se puede asignar a cualquier acción individual.
+- **Ventana de Z-Score:** El número de días para calcular la media móvil y la desviación estándar del spread de precios.
+- **Umbrales de Entrada/Salida:** Los niveles de z-score en los que la estrategia ajustará las asignaciones.
+- **Asignación Máxima (%):** El porcentaje máximo del portafolio que se puede asignar a cualquier acción individual.
 3. **Ejecuta el Back-Test:** La herramienta calculará el rendimiento de la estrategia y mostrará gráficos interactivos y métricas.
 
 **Entendiendo la estrategia:**
@@ -37,7 +37,6 @@ Esta herramienta te permite realizar un back-testing de una estrategia de tradin
 - **Asignación Avanzada:** Las asignaciones a cada acción (y efectivo) son proporcionales a la magnitud del z-score.
 
 ---
-
 """)
 
 # Sidebar for User Inputs
@@ -62,6 +61,10 @@ default_ticker2 = 'MSFT'
 
 ticker1 = st.sidebar.text_input("Símbolo de la Primera Acción", value=default_ticker1).upper()
 ticker2 = st.sidebar.text_input("Símbolo de la Segunda Acción", value=default_ticker2).upper()
+
+# Validate ticker inputs
+if not ticker1 or not ticker2:
+  st.sidebar.error("⚠️ **Por favor, ingresa símbolos válidos para ambas acciones.**")
 
 start_date = st.sidebar.date_input("Fecha de Inicio", value=datetime(2020, 1, 1))
 end_date = st.sidebar.date_input("Fecha de Fin", value=datetime.today())
@@ -206,9 +209,7 @@ signal_df = data[['Signal']].dropna()
 
 # 1. Stock Prices Plot
 st.header("📊 Precios de Acciones")
-st.markdown("""
-Este gráfico muestra los precios de cierre ajustados de las dos acciones seleccionadas a lo largo del período elegido.
-""")
+st.markdown("""Este gráfico muestra los precios de cierre ajustados de las dos acciones seleccionadas a lo largo del período elegido.""")
 fig_prices = make_subplots(rows=1, cols=1, shared_xaxes=True)
 
 fig_prices.add_trace(go.Scatter(
@@ -238,9 +239,7 @@ st.plotly_chart(fig_prices, use_container_width=True)
 
 # 2. Z-Score with Trade Signals Plot
 st.header("📈 Z-Score del Spread con Señales de Asignación")
-st.markdown("""
-Este gráfico muestra el z-score del spread entre las dos acciones, junto con los umbrales de entrada y salida. Ilustra cómo la estrategia ajusta las asignaciones en función del z-score.
-""")
+st.markdown("""Este gráfico muestra el z-score del spread entre las dos acciones, junto con los umbrales de entrada y salida. Ilustra cómo la estrategia ajusta las asignaciones en función del z-score.""")
 
 fig_zscore = make_subplots(rows=1, cols=1, shared_xaxes=True)
 
@@ -308,9 +307,7 @@ st.plotly_chart(fig_zscore, use_container_width=True)
 
 # 3. Asignación de Portafolio a lo Largo del Tiempo
 st.header("📈 Asignación de Portafolio a lo Largo del Tiempo")
-st.markdown("""
-Este gráfico muestra cómo cambian las asignaciones del portafolio a cada acción y a efectivo a lo largo del tiempo, basándose en las señales del z-score.
-""")
+st.markdown("""Este gráfico muestra cómo cambian las asignaciones del portafolio a cada acción y a efectivo a lo largo del tiempo, basándose en las señales del z-score.""")
 
 fig_alloc = make_subplots(rows=1, cols=1, shared_xaxes=True)
 
@@ -352,9 +349,7 @@ st.plotly_chart(fig_alloc, use_container_width=True)
 
 # 4. Cumulative Returns Plot
 st.header("📈 Rendimiento Acumulado de la Estrategia vs. Benchmark")
-st.markdown("""
-Este gráfico compara los rendimientos acumulados de la estrategia adaptativa contra un benchmark de mantener un portafolio de igual ponderación de las dos acciones de forma continua.
-""")
+st.markdown("""Este gráfico compara los rendimientos acumulados de la estrategia adaptativa contra un benchmark de mantener un portafolio de igual ponderación de las dos acciones de forma continua.""")
 
 fig_cum_returns = make_subplots(rows=1, cols=1, shared_xaxes=True)
 
@@ -387,9 +382,7 @@ st.plotly_chart(fig_cum_returns, use_container_width=True)
 
 # Performance Metrics
 st.header("📊 Métricas de Rendimiento")
-st.markdown("""
-La tabla a continuación resume las métricas clave de rendimiento para la estrategia adaptativa y el benchmark.
-""")
+st.markdown("""La tabla a continuación resume las métricas clave de rendimiento para la estrategia adaptativa y el benchmark.""")
 
 def calculate_metrics(strategy_returns, benchmark_returns, cumulative_strategy, cumulative_benchmark):
   # Strategy Metrics
@@ -433,13 +426,10 @@ st.table(metrics_df)
 
 # Trade Signals Table
 st.header("📋 Señales de Asignación")
-st.markdown("""
-La tabla a continuación detalla los momentos en que las asignaciones del portafolio cambiaron en función de las señales del z-score.
-""")
+st.markdown("""La tabla a continuación detalla los momentos en que las asignaciones del portafolio cambiaron en función de las señales del z-score.""")
 st.write(signal_df.dropna())
 
 # Footer Disclaimer
-st.markdown("""
----
+st.markdown("""---
 **Disclaimer:** Esta herramienta es solo para fines educativos y no debe considerarse como asesoramiento financiero. Siempre realiza tu propia investigación antes de tomar decisiones de inversión.
 """)
