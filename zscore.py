@@ -186,16 +186,20 @@ def generate_signals_adaptive(weights_df):
       w_cash = row['Weight_Cash']
 
       signal = None
+      percentage_change_t1 = ((w_t1 - prev_w_t1) / prev_w_t1 * 100) if prev_w_t1 != 0 else 0
+      percentage_change_t2 = ((w_t2 - prev_w_t2) / prev_w_t2 * 100) if prev_w_t2 != 0 else 0
+      percentage_change_cash = ((w_cash - prev_w_cash) / prev_w_cash * 100) if prev_w_cash != 0 else 0
+
       if w_t1 > prev_w_t1:
-          signal = 'Aumentar ' + ticker1
+          signal = f'Aumentar {ticker1} ({percentage_change_t1:.2f}%)'
       elif w_t2 > prev_w_t2:
-          signal = 'Aumentar ' + ticker2
+          signal = f'Aumentar {ticker2} ({percentage_change_t2:.2f}%)'
       elif w_cash > prev_w_cash:
-          signal = 'Aumentar Posición en Efectivo'
+          signal = f'Aumentar Posición en Efectivo ({percentage_change_cash:.2f}%)'
       elif w_t1 < prev_w_t1:
-          signal = 'Disminuir ' + ticker1
+          signal = f'Disminuir {ticker1} ({percentage_change_t1:.2f}%)'
       elif w_t2 < prev_w_t2:
-          signal = 'Disminuir ' + ticker2
+          signal = f'Disminuir {ticker2} ({percentage_change_t2:.2f}%)'
 
       signals.append(signal)
       prev_w_t1, prev_w_t2, prev_w_cash = w_t1, w_t2, w_cash
