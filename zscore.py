@@ -184,15 +184,15 @@ def generate_signals_adaptive(weights_df):
 
       signal = None
       if w_t1 > prev_w_t1:
-          signal = 'Aumentar ' + ticker1
+          signal = f'Aumentar {ticker1} ({(w_t1 - prev_w_t1) * 100:.2f}%)'
       elif w_t2 > prev_w_t2:
-          signal = 'Aumentar ' + ticker2
+          signal = f'Aumentar {ticker2} ({(w_t2 - prev_w_t2) * 100:.2f}%)'
       elif w_cash > prev_w_cash:
           signal = 'Aumentar Posición en Efectivo'
       elif w_t1 < prev_w_t1:
-          signal = 'Disminuir ' + ticker1
+          signal = f'Disminuir {ticker1} ({(prev_w_t1 - w_t1) * 100:.2f}%)'
       elif w_t2 < prev_w_t2:
-          signal = 'Disminuir ' + ticker2
+          signal = f'Disminuir {ticker2} ({(prev_w_t2 - w_t2) * 100:.2f}%)'
 
       signals.append(signal)
       prev_w_t1, prev_w_t2, prev_w_cash = w_t1, w_t2, w_cash
