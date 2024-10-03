@@ -189,7 +189,7 @@ if strategy_type == "Trading de Pares":
           else:
               if i > 0:
                   allocations.iloc[i] = allocations.iloc[i-1]  # Mantener la última asignación
-      
+
       # Rellenar posiciones iniciales si es necesario
       allocations.fillna(method='ffill', inplace=True)
       allocations.fillna(0, inplace=True)  # Si aún hay NaN, asignar todo a efectivo
