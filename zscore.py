@@ -219,7 +219,7 @@ def generate_signals_adaptive(weights_df):
       prev_w_t1, prev_w_t2, prev_w_cash = w_t1, w_t2, w_cash
 
   return signals
-
+  
 data['Signal'] = generate_signals_adaptive(weights_df)
 signal_df = data[['Signal']].dropna()
 
