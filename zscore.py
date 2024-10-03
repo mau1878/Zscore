@@ -15,33 +15,33 @@ st.set_page_config(
 # Title and Description
 st.title("📈 Adaptive Pairs Trading Backtester")
 st.markdown("""
-Welcome to the **Adaptive Pairs Trading Backtester**!
+Bienvenido al **Adaptive Pairs Trading Backtester**!
 
-This tool allows you to backtest a pairs trading strategy between two stocks, incorporating advanced allocation strategies and cash positions. It's designed to be useful even in markets where short selling isn't possible.
+Esta herramienta te permite realizar un back-testing de una estrategia de trading de pares entre dos acciones, incorporando estrategias de asignación avanzadas y posiciones en efectivo. Está diseñada para ser útil incluso en mercados donde no se permite la venta en corto.
 
 ---
 
-**How to Use This Tool:**
+**Cómo usar esta herramienta:**
 
-1. **Select Two Stocks:** Choose two stocks that you believe are correlated or have historically moved together.
-2. **Set Parameters:**
- - **Z-Score Window:** The number of days to calculate the rolling mean and standard deviation of the price spread.
- - **Entry/Exit Thresholds:** The z-score levels at which the strategy will adjust allocations.
- - **Maximum Allocation (%):** The maximum percentage of the portfolio to allocate to any single stock.
-3. **Run the Backtest:** The tool will calculate the strategy performance and display interactive charts and metrics.
+1. **Selecciona dos acciones:** Elige dos acciones que creas que están correlacionadas o que históricamente se han movido juntas.
+2. **Configura los parámetros:**
+ - **Ventana de Z-Score:** El número de días para calcular la media móvil y la desviación estándar del spread de precios.
+ - **Umbrales de Entrada/Salida:** Los niveles de z-score en los que la estrategia ajustará las asignaciones.
+ - **Asignación Máxima (%):** El porcentaje máximo del portafolio que se puede asignar a cualquier acción individual.
+3. **Ejecuta el Back-Test:** La herramienta calculará el rendimiento de la estrategia y mostrará gráficos interactivos y métricas.
 
-**Understanding the Strategy:**
+**Entendiendo la estrategia:**
 
-- **Objective:** To profit from the relative movements of two stocks by adjusting portfolio allocations based on their price spread's z-score.
-- **Cash Position:** When the spread doesn't indicate a strong signal, the strategy can move a portion of the portfolio into cash to reduce market exposure.
-- **Advanced Allocation:** Allocations to each stock (and cash) are proportional to the magnitude of the z-score.
+- **Objetivo:** Obtener ganancias de los movimientos relativos de dos acciones ajustando las asignaciones del portafolio en función del z-score de su spread de precios.
+- **Posición en Efectivo:** Cuando el spread no indica una señal fuerte, la estrategia puede mover una porción del portafolio a efectivo para reducir la exposición al mercado.
+- **Asignación Avanzada:** Las asignaciones a cada acción (y efectivo) son proporcionales a la magnitud del z-score.
 
 ---
 
 """)
 
 # Sidebar for User Inputs
-st.sidebar.header("Select Parameters")
+st.sidebar.header("Selecciona Parámetros")
 
 # Function to fetch stock data with caching and error handling
 @st.cache_data(ttl=60*60)  # Cache data for 1 hour
@@ -49,36 +49,36 @@ def get_stock_data(ticker, start, end):
   try:
       data = yf.download(ticker, start=start, end=end, progress=False)
       if data.empty:
-          st.error(f"Failed to fetch data for `{ticker}`. Please check the ticker symbol.")
+          st.error(f"No se pudo obtener datos para `{ticker}`. Por favor, verifica el símbolo de la acción.")
           return None
       return data['Adj Close']
   except Exception as e:
-      st.error(f"Error fetching data for `{ticker}`: {e}")
+      st.error(f"Error al obtener datos para `{ticker}`: {e}")
       return None
 
 # User Inputs
 default_ticker1 = 'AAPL'  # Default stocks
 default_ticker2 = 'MSFT'
 
-ticker1 = st.sidebar.text_input("First Stock Ticker", value=default_ticker1).upper()
-ticker2 = st.sidebar.text_input("Second Stock Ticker", value=default_ticker2).upper()
+ticker1 = st.sidebar.text_input("Símbolo de la Primera Acción", value=default_ticker1).upper()
+ticker2 = st.sidebar.text_input("Símbolo de la Segunda Acción", value=default_ticker2).upper()
 
-start_date = st.sidebar.date_input("Start Date", value=datetime(2020, 1, 1))
-end_date = st.sidebar.date_input("End Date", value=datetime.today())
+start_date = st.sidebar.date_input("Fecha de Inicio", value=datetime(2020, 1, 1))
+end_date = st.sidebar.date_input("Fecha de Fin", value=datetime.today())
 
-zscore_window = st.sidebar.number_input("Z-Score Window (Days)", min_value=5, max_value=252, value=30, step=1)
-entry_zscore = st.sidebar.number_input("Entry Threshold (Z-Score)", min_value=0.1, max_value=3.0, value=1.0, step=0.1)
-exit_zscore = st.sidebar.number_input("Exit Threshold (Z-Score)", min_value=0.0, max_value=2.0, value=0.5, step=0.1)
+zscore_window = st.sidebar.number_input("Ventana de Z-Score (Días)", min_value=5, max_value=252, value=30, step=1)
+entry_zscore = st.sidebar.number_input("Umbral de Entrada (Z-Score)", min_value=0.1, max_value=3.0, value=1.0, step=0.1)
+exit_zscore = st.sidebar.number_input("Umbral de Salida (Z-Score)", min_value=0.0, max_value=2.0, value=0.5, step=0.1)
 
-max_allocation = st.sidebar.number_input("Maximum Allocation to a Single Stock (%)", min_value=10, max_value=100, value=50, step=5)
+max_allocation = st.sidebar.number_input("Asignación Máxima a una Acción Individual (%)", min_value=10, max_value=100, value=50, step=5)
 max_allocation /= 100  # Convert to decimal
 
 # Validate Date Inputs
 if start_date >= end_date:
-  st.sidebar.error("⚠️ **Start date must be before end date.**")
+  st.sidebar.error("⚠️ **La fecha de inicio debe ser anterior a la fecha de fin.**")
 
 # Fetch Stock Data
-with st.spinner("🔄 Fetching stock data..."):
+with st.spinner("🔄 Obteniendo datos de acciones..."):
   stock1 = get_stock_data(ticker1, start_date, end_date)
   stock2 = get_stock_data(ticker2, start_date, end_date)
 
@@ -90,7 +90,7 @@ if stock1 is None or stock2 is None:
 data = pd.DataFrame({ticker1: stock1, ticker2: stock2}).dropna()
 
 if data.empty:
-  st.error("❌ **No overlapping data between the selected dates.** Please adjust the date range or tickers.")
+  st.error("❌ **No hay datos superpuestos entre las fechas seleccionadas.** Por favor, ajusta el rango de fechas o los símbolos de las acciones.")
   st.stop()
 
 # Calculate Spread and Z-Score
@@ -184,15 +184,15 @@ def generate_signals_adaptive(weights_df):
 
       signal = None
       if w_t1 > prev_w_t1:
-          signal = 'Increase ' + ticker1
+          signal = 'Aumentar ' + ticker1
       elif w_t2 > prev_w_t2:
-          signal = 'Increase ' + ticker2
+          signal = 'Aumentar ' + ticker2
       elif w_cash > prev_w_cash:
-          signal = 'Increase Cash Position'
+          signal = 'Aumentar Posición en Efectivo'
       elif w_t1 < prev_w_t1:
-          signal = 'Decrease ' + ticker1
+          signal = 'Disminuir ' + ticker1
       elif w_t2 < prev_w_t2:
-          signal = 'Decrease ' + ticker2
+          signal = 'Disminuir ' + ticker2
 
       signals.append(signal)
       prev_w_t1, prev_w_t2, prev_w_cash = w_t1, w_t2, w_cash
@@ -205,9 +205,9 @@ signal_df = data[['Signal']].dropna()
 # Visualization with Plotly
 
 # 1. Stock Prices Plot
-st.header("📊 Stock Prices")
+st.header("📊 Precios de Acciones")
 st.markdown("""
-This chart displays the adjusted closing prices of the two selected stocks over the chosen time period.
+Este gráfico muestra los precios de cierre ajustados de las dos acciones seleccionadas a lo largo del período elegido.
 """)
 fig_prices = make_subplots(rows=1, cols=1, shared_xaxes=True)
 
@@ -226,9 +226,9 @@ fig_prices.add_trace(go.Scatter(
 ))
 
 fig_prices.update_layout(
-  title=f"Adjusted Close Prices - {ticker1} & {ticker2}",
-  xaxis_title="Date",
-  yaxis_title="Price",
+  title=f"Precios de Cierre Ajustados - {ticker1} & {ticker2}",
+  xaxis_title="Fecha",
+  yaxis_title="Precio",
   hovermode='x unified',
   width=1000,
   height=500
@@ -237,9 +237,9 @@ fig_prices.update_layout(
 st.plotly_chart(fig_prices, use_container_width=True)
 
 # 2. Z-Score with Trade Signals Plot
-st.header("📈 Z-Score of Spread with Trade Signals")
+st.header("📈 Z-Score del Spread con Señales de Asignación")
 st.markdown("""
-This chart shows the z-score of the price spread between the two stocks, along with entry and exit thresholds. It illustrates how the strategy adjusts allocations based on the z-score.
+Este gráfico muestra el z-score del spread entre las dos acciones, junto con los umbrales de entrada y salida. Ilustra cómo la estrategia ajusta las asignaciones en función del z-score.
 """)
 
 fig_zscore = make_subplots(rows=1, cols=1, shared_xaxes=True)
@@ -258,28 +258,28 @@ fig_zscore.add_trace(go.Scatter(
   x=data.index,
   y=[entry_zscore]*len(data),
   mode='lines',
-  name='Entry Threshold',
+  name='Umbral de Entrada',
   line=dict(color='red', dash='dash')
 ))
 fig_zscore.add_trace(go.Scatter(
   x=data.index,
   y=[-entry_zscore]*len(data),
   mode='lines',
-  name='-Entry Threshold',
+  name='-Umbral de Entrada',
   line=dict(color='red', dash='dash')
 ))
 fig_zscore.add_trace(go.Scatter(
   x=data.index,
   y=[exit_zscore]*len(data),
   mode='lines',
-  name='Exit Threshold',
+  name='Umbral de Salida',
   line=dict(color='green', dash='dash')
 ))
 fig_zscore.add_trace(go.Scatter(
   x=data.index,
   y=[-exit_zscore]*len(data),
   mode='lines',
-  name='-Exit Threshold',
+  name='-Umbral de Salida',
   line=dict(color='green', dash='dash')
 ))
 
@@ -289,15 +289,15 @@ fig_zscore.add_trace(go.Scatter(
   x=allocation_changes.index,
   y=allocation_changes['Z-Score'],
   mode='markers',
-  name='Allocation Change',
+  name='Cambio de Asignación',
   marker=dict(symbol='circle', color='purple', size=10),
-  hovertemplate='Date: %{x}<br>Signal: %{text}',
+  hovertemplate='Fecha: %{x}<br>Señal: %{text}',
   text=allocation_changes['Signal']
 ))
 
 fig_zscore.update_layout(
-  title="Z-Score with Allocation Signals",
-  xaxis_title="Date",
+  title="Z-Score con Señales de Asignación",
+  xaxis_title="Fecha",
   yaxis_title="Z-Score",
   hovermode='x unified',
   width=1000,
@@ -306,10 +306,10 @@ fig_zscore.update_layout(
 
 st.plotly_chart(fig_zscore, use_container_width=True)
 
-# 3. Portfolio Allocation Over Time
-st.header("📈 Portfolio Allocation Over Time")
+# 3. Asignación de Portafolio a lo Largo del Tiempo
+st.header("📈 Asignación de Portafolio a lo Largo del Tiempo")
 st.markdown("""
-This chart displays how the portfolio allocations to each stock and cash change over time based on the z-score signals.
+Este gráfico muestra cómo cambian las asignaciones del portafolio a cada acción y a efectivo a lo largo del tiempo, basándose en las señales del z-score.
 """)
 
 fig_alloc = make_subplots(rows=1, cols=1, shared_xaxes=True)
@@ -318,7 +318,7 @@ fig_alloc.add_trace(go.Scatter(
   x=data.index,
   y=data['Weight_' + ticker1],
   mode='lines',
-  name='Allocation to ' + ticker1,
+  name='Asignación a ' + ticker1,
   stackgroup='one'
 ))
 
@@ -326,7 +326,7 @@ fig_alloc.add_trace(go.Scatter(
   x=data.index,
   y=data['Weight_' + ticker2],
   mode='lines',
-  name='Allocation to ' + ticker2,
+  name='Asignación a ' + ticker2,
   stackgroup='one'
 ))
 
@@ -334,14 +334,14 @@ fig_alloc.add_trace(go.Scatter(
   x=data.index,
   y=data['Weight_Cash'],
   mode='lines',
-  name='Allocation to Cash',
+  name='Asignación a Efectivo',
   stackgroup='one'
 ))
 
 fig_alloc.update_layout(
-  title="Portfolio Allocation Over Time",
-  xaxis_title="Date",
-  yaxis_title="Allocation Percentage",
+  title="Asignación de Portafolio a lo Largo del Tiempo",
+  xaxis_title="Fecha",
+  yaxis_title="Porcentaje de Asignación",
   yaxis=dict(range=[0, 1]),
   hovermode='x unified',
   width=1000,
@@ -351,9 +351,9 @@ fig_alloc.update_layout(
 st.plotly_chart(fig_alloc, use_container_width=True)
 
 # 4. Cumulative Returns Plot
-st.header("📈 Strategy vs. Benchmark Cumulative Returns")
+st.header("📈 Rendimiento Acumulado de la Estrategia vs. Benchmark")
 st.markdown("""
-This chart compares the cumulative returns of the adaptive strategy against a benchmark of holding an equal-weighted portfolio of the two stocks continuously.
+Este gráfico compara los rendimientos acumulados de la estrategia adaptativa contra un benchmark de mantener un portafolio de igual ponderación de las dos acciones de forma continua.
 """)
 
 fig_cum_returns = make_subplots(rows=1, cols=1, shared_xaxes=True)
@@ -362,7 +362,7 @@ fig_cum_returns.add_trace(go.Scatter(
   x=cumulative_strategy.index,
   y=cumulative_strategy,
   mode='lines',
-  name='Adaptive Strategy',
+  name='Estrategia Adaptativa',
   line=dict(color='purple')
 ))
 
@@ -370,14 +370,14 @@ fig_cum_returns.add_trace(go.Scatter(
   x=cumulative_benchmark.index,
   y=cumulative_benchmark,
   mode='lines',
-  name='Benchmark (Equal-weighted)',
+  name='Benchmark (Igual Ponderación)',
   line=dict(color='grey')
 ))
 
 fig_cum_returns.update_layout(
-  title="Cumulative Returns",
-  xaxis_title="Date",
-  yaxis_title="Cumulative Returns",
+  title="Rendimiento Acumulado",
+  xaxis_title="Fecha",
+  yaxis_title="Rendimiento Acumulado",
   hovermode='x unified',
   width=1000,
   height=500
@@ -386,9 +386,9 @@ fig_cum_returns.update_layout(
 st.plotly_chart(fig_cum_returns, use_container_width=True)
 
 # Performance Metrics
-st.header("📊 Performance Metrics")
+st.header("📊 Métricas de Rendimiento")
 st.markdown("""
-The table below summarizes key performance metrics for the adaptive strategy and the benchmark.
+La tabla a continuación resume las métricas clave de rendimiento para la estrategia adaptativa y el benchmark.
 """)
 
 def calculate_metrics(strategy_returns, benchmark_returns, cumulative_strategy, cumulative_benchmark):
@@ -407,19 +407,19 @@ def calculate_metrics(strategy_returns, benchmark_returns, cumulative_strategy, 
   benchmark_max_dd = (cumulative_benchmark / cumulative_benchmark.cummax() -1).min()
 
   metrics = {
-      "Adaptive Strategy": {
-          "Total Return": f"{total_return:.2%}",
-          "Annualized Return": f"{annual_return:.2%}",
-          "Annualized Volatility": f"{annual_vol:.2%}",
-          "Sharpe Ratio": f"{sharpe_ratio:.2f}",
-          "Max Drawdown": f"{max_drawdown:.2%}",
+      "Estrategia Adaptativa": {
+          "Rendimiento Total": f"{total_return:.2%}",
+          "Rendimiento Anualizado": f"{annual_return:.2%}",
+          "Volatilidad Anualizada": f"{annual_vol:.2%}",
+          "Ratio de Sharpe": f"{sharpe_ratio:.2f}",
+          "Máxima Caída": f"{max_drawdown:.2%}",
       },
-      "Benchmark (Equal-weighted)": {
-          "Total Return": f"{benchmark_total:.2%}",
-          "Annualized Return": f"{benchmark_annual:.2%}",
-          "Annualized Volatility": f"{benchmark_vol:.2%}",
-          "Sharpe Ratio": f"{benchmark_sharpe:.2f}",
-          "Max Drawdown": f"{benchmark_max_dd:.2%}",
+      "Benchmark (Igual Ponderación)": {
+          "Rendimiento Total": f"{benchmark_total:.2%}",
+          "Rendimiento Anualizado": f"{benchmark_annual:.2%}",
+          "Volatilidad Anualizada": f"{benchmark_vol:.2%}",
+          "Ratio de Sharpe": f"{benchmark_sharpe:.2f}",
+          "Máxima Caída": f"{benchmark_max_dd:.2%}",
       }
   }
   return metrics
@@ -432,14 +432,14 @@ metrics_df = pd.DataFrame(metrics).T
 st.table(metrics_df)
 
 # Trade Signals Table
-st.header("📋 Allocation Signals")
+st.header("📋 Señales de Asignación")
 st.markdown("""
-The table below details the points in time where the portfolio allocations changed based on the z-score signals.
+La tabla a continuación detalla los momentos en que las asignaciones del portafolio cambiaron en función de las señales del z-score.
 """)
 st.write(signal_df.dropna())
 
 # Footer Disclaimer
 st.markdown("""
 ---
-**Disclaimer:** This tool is for educational purposes only and should not be considered financial advice. Always do your own research before making investment decisions.
+**Disclaimer:** Esta herramienta es solo para fines educativos y no debe considerarse como asesoramiento financiero. Siempre realiza tu propia investigación antes de tomar decisiones de inversión.
 """)
