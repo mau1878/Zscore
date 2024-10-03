@@ -495,6 +495,72 @@ elif strategy_type == "Estrategia de Acción Única":
   st.header(f"📈 Señales para {single_ticker}")
   st.write(single_stock_signals)
 
+  # Visualization for Single Stock
+  st.header("📊 Gráficos para la Acción Única")
+  
+  # 1. Adjusted Close Price Plot
+  st.subheader("📈 Precio Ajustado de la Acción")
+  fig_price = go.Figure()
+  fig_price.add_trace(go.Scatter(
+      x=single_stock_df['Date'],
+      y=single_stock_df['Adj Close'],
+      mode='lines',
+      name='Precio Ajustado'
+  ))
+  fig_price.update_layout(
+      title=f"Precio Ajustado de {single_ticker}",
+      xaxis_title="Fecha",
+      yaxis_title="Precio Ajustado",
+      hovermode='x unified'
+  )
+  st.plotly_chart(fig_price, use_container_width=True)
+
+  # 2. Z-Score Plot
+  st.subheader("📈 Z-Score de la Acción")
+  fig_zscore_single = go.Figure()
+  fig_zscore_single.add_trace(go.Scatter(
+      x=single_stock_df['Date'],
+      y=single_stock_df['Z-Score'],
+      mode='lines',
+      name='Z-Score',
+      line=dict(color='blue')
+  ))
+  fig_zscore_single.add_trace(go.Scatter(
+      x=single_stock_df['Date'],
+      y=[entry_zscore]*len(single_stock_df),
+      mode='lines',
+      name='Umbral de Entrada',
+      line=dict(color='red', dash='dash')
+  ))
+  fig_zscore_single.add_trace(go.Scatter(
+      x=single_stock_df['Date'],
+      y=[-entry_zscore]*len(single_stock_df),
+      mode='lines',
+      name='-Umbral de Entrada',
+      line=dict(color='red', dash='dash')
+  ))
+  fig_zscore_single.add_trace(go.Scatter(
+      x=single_stock_df['Date'],
+      y=[exit_zscore]*len(single_stock_df),
+      mode='lines',
+      name='Umbral de Salida',
+      line=dict(color='green', dash='dash')
+  ))
+  fig_zscore_single.add_trace(go.Scatter(
+      x=single_stock_df['Date'],
+      y=[-exit_zscore]*len(single_stock_df),
+      mode='lines',
+      name='-Umbral de Salida',
+      line=dict(color='green', dash='dash')
+  ))
+  fig_zscore_single.update_layout(
+      title=f"Z-Score de {single_ticker}",
+      xaxis_title="Fecha",
+      yaxis_title="Z-Score",
+      hovermode='x unified'
+  )
+  st.plotly_chart(fig_zscore_single, use_container_width=True)
+
 # Footer Disclaimer
 st.markdown("""
 ---
