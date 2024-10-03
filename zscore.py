@@ -25,9 +25,9 @@ Esta herramienta te permite realizar un back-testing de una estrategia de tradin
 
 1. **Selecciona el Tipo de Estrategia:** Elige entre Trading de Pares o Estrategia de Acción Única.
 2. **Configura los Parámetros:**
- - **Ventana de Z-Score:** Número de días para calcular la media móvil y la desviación estándar del spread de precios.
- - **Umbrales de Entrada/Salida:** Niveles de z-score en los que la estrategia ajustará las asignaciones.
- - **Asignación Máxima (%):** Porcentaje máximo del portafolio que se puede asignar a cualquier acción individual.
+- **Ventana de Z-Score:** Número de días para calcular la media móvil y la desviación estándar del spread de precios.
+- **Umbrales de Entrada/Salida:** Niveles de z-score en los que la estrategia ajustará las asignaciones.
+- **Asignación Máxima (%):** Porcentaje máximo del portafolio que se puede asignar a cualquier acción individual.
 3. **Ejecuta el Back-Test:** La herramienta calculará el rendimiento de la estrategia y mostrará gráficos interactivos y métricas.
 
 **Entendiendo la estrategia:**
@@ -152,26 +152,23 @@ if strategy_type == "Trading de Pares":
   data['Z-Score'] = (data['Spread'] - data['Spread_Mean']) / data['Spread_STD']
 
   # Lógica de Backtesting con Posición en Efectivo y Asignación Avanzada (Sin Venta en Corto)
-  # Lógica de Backtesting con Posición en Efectivo y Asignación Avanzada (Sin Venta en Corto)
-  # Lógica de Backtesting con Posición en Efectivo y Asignación Avanzada (Sin Venta en Corto)
-# Lógica de Backtesting con Posición en Efectivo y Asignación Avanzada (Sin Venta en Corto)
-# Lógica de Backtesting con Posición en Efectivo y Asignación Avanzada (Sin Venta en Corto)
   def backtest_pairs_adaptive_no_short(data, ticker1, ticker2, entry_threshold, exit_threshold, max_alloc):
       # Inicializar asignaciones
       allocations = pd.DataFrame(index=data.index, columns=['Weight_' + ticker1, 'Weight_' + ticker2, 'Weight_Cash'])
       allocations.iloc[:] = 0  # Comenzar con todo en efectivo
-    
+      
       # Condiciones para entrar y salir de posiciones
       entry_condition = data['Z-Score'].abs() >= entry_threshold
       exit_condition = data['Z-Score'].abs() <= exit_threshold
-    
+      
       # Señales
       data['Signal'] = None
       current_position = None  # Ninguna, 'Overweight ticker1', 'Overweight ticker2'
-    
+      
       for i in range(len(data)):
           if entry_condition.iloc[i]:
               z = data['Z-Score'].iloc[i]
+              st.write(f"Entry Condition Met at {data.index[i]}: Z-Score = {z}")
               if z > 0 and current_position != f'Overweight {ticker2}':
                   # Sobreponderar ticker2
                   allocations.iloc[i] = [0, max_alloc, 1 - max_alloc]  # Asignar a ticker2 y efectivo
@@ -183,6 +180,7 @@ if strategy_type == "Trading de Pares":
                   data['Signal'].iloc[i] = f'Overweight {ticker1}'
                   current_position = f'Overweight {ticker1}'
           elif exit_condition.iloc[i]:
+              st.write(f"Exit Condition Met at {data.index[i]}")
               # Salir a Efectivo
               allocations.iloc[i] = [0, 0, 1]  # Todo en efectivo
               if current_position is not None:
@@ -191,38 +189,38 @@ if strategy_type == "Trading de Pares":
           else:
               if i > 0:
                   allocations.iloc[i] = allocations.iloc[i-1]  # Mantener la última asignación
-    
+      
       # Rellenar posiciones iniciales si es necesario
       allocations.fillna(method='ffill', inplace=True)
       allocations.fillna(0, inplace=True)  # Si aún hay NaN, asignar todo a efectivo
-    
+      
       # Calcular retornos diarios del portafolio
       daily_returns = data[[ticker1, ticker2]].pct_change().fillna(0)
       
       # Debugging: Print daily returns
       st.write("Daily Returns:")
       st.write(daily_returns)
-    
+      
       strategy_returns = (allocations.shift(1) * daily_returns).sum(axis=1)  # Usar shift para evitar look-ahead bias
       
       # Debugging: Print strategy returns
       st.write("Strategy Returns:")
       st.write(strategy_returns)
-    
+      
       strategy_returns.fillna(0, inplace=True)  # Asegurarse de que no haya NaN en los retornos
-    
+      
       # Calcular retornos acumulados
       cumulative_strategy = (1 + strategy_returns).cumprod()  # Cálculo correcto de retornos acumulados
-    
+      
       # Debugging: Print cumulative strategy returns
       st.write("Cumulative Strategy Returns:")
       st.write(cumulative_strategy)
-    
+      
       # Benchmark: Portafolio igual ponderado mantenido constantemente
       benchmark_weights = np.array([0.5, 0.5])
       benchmark_returns = daily_returns.dot(benchmark_weights)
       cumulative_benchmark = (1 + benchmark_returns).cumprod()
-    
+      
       return strategy_returns, cumulative_strategy, cumulative_benchmark, benchmark_returns, allocations
 
   # Ejecutar Backtest
