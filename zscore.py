@@ -175,29 +175,21 @@ if strategy_type == "Trading de Pares":
   # Generate Trade Signals for Display
   def generate_signals_adaptive(weights_df):
       signals = []
-      prev_w_t1 = 0
-      prev_w_t2 = 0
-      prev_w_cash = 1
+      prev_signal = None  # Track the last signal
 
       for idx, row in weights_df.iterrows():
           w_t1 = row['Weight_' + ticker1]
           w_t2 = row['Weight_' + ticker2]
-          w_cash = row['Weight_Cash']
 
-          signal = None
-          if w_t1 > prev_w_t1:
-              signal = f'Aumentar {ticker1} ({(w_t1 - prev_w_t1) * 100:.2f}%)'
-          elif w_t2 > prev_w_t2:
-              signal = f'Aumentar {ticker2} ({(w_t2 - prev_w_t2) * 100:.2f}%)'
-          elif w_cash > prev_w_cash:
-              signal = 'Aumentar Posición en Efectivo'
-          elif w_t1 < prev_w_t1:
-              signal = f'Disminuir {ticker1} ({(prev_w_t1 - w_t1) * 100:.2f}%)'
-          elif w_t2 < prev_w_t2:
-              signal = f'Disminuir {ticker2} ({(prev_w_t2 - w_t2) * 100:.2f}%)'
-
-          signals.append(signal)
-          prev_w_t1, prev_w_t2, prev_w_cash = w_t1, w_t2, w_cash
+          # Determine the current signal based on weights
+          if w_t1 > 0 and (prev_signal != 'Comprar'):
+              signals.append('Comprar')
+              prev_signal = 'Comprar'
+          elif w_t2 > 0 and (prev_signal != 'Vender'):
+              signals.append('Vender')
+              prev_signal = 'Vender'
+          else:
+              signals.append('Mantener')  # No change
 
       return signals
 
@@ -475,13 +467,17 @@ elif strategy_type == "Estrategia de Acción Única":
       stock_data['Z-Score'] = (stock_data['Adj Close'] - stock_data['Mean']) / stock_data['STD']
 
       signals = []
+      prev_signal = None  # Track the last signal
+
       for z in stock_data['Z-Score']:
-          if z >= entry_threshold:
+          if z >= entry_threshold and prev_signal != 'Comprar':
               signals.append('Comprar')
-          elif z <= -entry_threshold:
+              prev_signal = 'Comprar'
+          elif z <= -entry_threshold and prev_signal != 'Vender':
               signals.append('Vender')
+              prev_signal = 'Vender'
           else:
-              signals.append('Mantener')
+              signals.append('Mantener')  # No change
 
       stock_data['Signal'] = signals
       return stock_data[['Adj Close', 'Z-Score', 'Signal']]
@@ -582,9 +578,42 @@ elif strategy_type == "Estrategia de Acción Única":
   )
   st.plotly_chart(fig_zscore_single, use_container_width=True)
 
-  # 3. Comparison of Buy and Hold vs Trading Strategy
-  st.subheader("📈 Comparación de Estrategia de Compra y Mantenimiento vs Estrategia de Trading")
-  
+  # 3. Asignación de Portafolio a lo Largo del Tiempo
+  st.header("📈 Asignación de Portafolio a lo Largo del Tiempo")
+  st.markdown("""
+  Este gráfico muestra cómo cambian las asignaciones del portafolio a la acción y a efectivo a lo largo del tiempo, basándose en las señales del z-score.
+  """)
+
+  # Calculate Portfolio Allocation
+  single_stock_df['Weight'] = np.where(single_stock_df['Signal'] == 'Comprar', 1, 0)  # 100% in stock when buying
+  single_stock_df['Weight'] = np.where(single_stock_df['Signal'] == 'Vender', 0, single_stock_df['Weight'])  # 0% when selling
+  single_stock_df['Weight'] = single_stock_df['Weight'].ffill().fillna(0)  # Forward fill to maintain position
+
+  fig_alloc = go.Figure()
+  fig_alloc.add_trace(go.Scatter(
+      x=single_stock_df['Date'],
+      y=single_stock_df['Weight'],
+      mode='lines',
+      name='Asignación a ' + single_ticker,
+      line=dict(color='blue')
+  ))
+
+  fig_alloc.update_layout(
+      title="Asignación de Portafolio a lo Largo del Tiempo",
+      xaxis_title="Fecha",
+      yaxis_title="Porcentaje de Asignación",
+      yaxis=dict(range=[0, 1]),
+      hovermode='x unified'
+  )
+
+  st.plotly_chart(fig_alloc, use_container_width=True)
+
+  # 4. Cumulative Returns Plot
+  st.header("📈 Rendimiento Acumulado de la Estrategia")
+  st.markdown("""
+  Este gráfico compara los rendimientos acumulados de la estrategia de trading contra un benchmark de compra y mantenimiento.
+  """)
+
   # Calculate Buy and Hold Returns
   single_stock_df['Buy_Hold_Returns'] = single_stock_df['Adj Close'] / single_stock_df['Adj Close'].iloc[0] - 1
 
