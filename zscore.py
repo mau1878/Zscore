@@ -201,6 +201,7 @@ if strategy_type == "Trading de Pares":
       st.write("Daily Returns:")
       st.write(daily_returns)
       
+      # Calculate strategy returns
       strategy_returns = (allocations.shift(1) * daily_returns).sum(axis=1)  # Usar shift para evitar look-ahead bias
       
       # Debugging: Print strategy returns
