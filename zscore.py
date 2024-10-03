@@ -17,23 +17,23 @@ st.title("📈 Adaptive Pairs Trading Backtester")
 st.markdown("""
 Bienvenido al **Adaptive Pairs Trading Backtester**!
 
-Esta herramienta te permite realizar un back-testing de una estrategia de trading de pares entre dos acciones, incorporando estrategias de asignación avanzadas y posiciones en efectivo. Está diseñada para ser útil incluso en mercados donde no se permite la venta en corto.
+Esta herramienta te permite realizar un back-testing de una estrategia de trading de pares entre dos acciones, así como una estrategia de acción única, incorporando estrategias de asignación avanzadas y posiciones en efectivo. Está diseñada para ser útil incluso en mercados donde no se permite la venta en corto.
 
 ---
 
 **Cómo usar esta herramienta:**
 
-1. **Selecciona dos acciones:** Elige dos acciones que creas que están correlacionadas o que históricamente se han movido juntas.
-2. **Configura los parámetros:**
-- **Ventana de Z-Score:** El número de días para calcular la media móvil y la desviación estándar del spread de precios.
-- **Umbrales de Entrada/Salida:** Los niveles de z-score en los que la estrategia ajustará las asignaciones.
-- **Asignación Máxima (%):** El porcentaje máximo del portafolio que se puede asignar a cualquier acción individual.
+1. **Selecciona el Tipo de Estrategia:** Elige entre Trading de Pares o Estrategia de Acción Única.
+2. **Configura los Parámetros:**
+ - **Ventana de Z-Score:** Número de días para calcular la media móvil y la desviación estándar del spread de precios.
+ - **Umbrales de Entrada/Salida:** Niveles de z-score en los que la estrategia ajustará las asignaciones.
+ - **Asignación Máxima (%):** Porcentaje máximo del portafolio que se puede asignar a cualquier acción individual.
 3. **Ejecuta el Back-Test:** La herramienta calculará el rendimiento de la estrategia y mostrará gráficos interactivos y métricas.
 
 **Entendiendo la estrategia:**
 
-- **Objetivo:** Obtener ganancias de los movimientos relativos de dos acciones ajustando las asignaciones del portafolio en función del z-score de su spread de precios.
-- **Posición en Efectivo:** Cuando el spread no indica una señal fuerte, la estrategia puede mover una porción del portafolio a efectivo para reducir la exposición al mercado.
+- **Objetivo:** Obtener ganancias de los movimientos relativos de dos acciones (en el caso de Trading de Pares) o de una sola acción ajustando las asignaciones del portafolio en función del z-score de su spread de precios.
+- **Posición en Efectivo:** Cuando el spread o movimiento no indica una señal fuerte, la estrategia puede mover una porción del portafolio a efectivo para reducir la exposición al mercado.
 - **Asignación Avanzada:** Las asignaciones a cada acción (y efectivo) son proporcionales a la magnitud del z-score.
 
 ---
@@ -50,7 +50,9 @@ def get_stock_data(ticker, start, end):
       if data.empty:
           st.error(f"No se pudo obtener datos para `{ticker}`. Por favor, verifica el símbolo de la acción.")
           return None
-      return data['Adj Close']
+      data = data['Adj Close'].dropna()
+      data.name = ticker
+      return data
   except Exception as e:
       st.error(f"Error al obtener datos para `{ticker}`: {e}")
       return None
@@ -62,7 +64,49 @@ default_ticker2 = 'MSFT'
 # Add a selection for strategy type
 strategy_type = st.sidebar.selectbox("Selecciona el Tipo de Estrategia", ["Trading de Pares", "Estrategia de Acción Única"])
 
+# Function to calculate performance metrics
+def calculate_metrics(strategy_returns, benchmark_returns=None):
+  metrics = {}
+  
+  # Strategy Metrics
+  total_return = (strategy_returns + 1).prod() - 1
+  annual_return = strategy_returns.mean() * 252
+  annual_vol = strategy_returns.std() * np.sqrt(252)
+  sharpe_ratio = annual_return / annual_vol if annual_vol != 0 else np.nan
+  rolling_max = (strategy_returns + 1).cumprod().cummax()
+  drawdown = (strategy_returns + 1).cumprod() / rolling_max - 1
+  max_drawdown = drawdown.min()
+  
+  metrics["Estrategia Adaptativa"] = {
+      "Rendimiento Total": f"{total_return:.2%}",
+      "Rendimiento Anualizado": f"{annual_return:.2%}",
+      "Volatilidad Anualizada": f"{annual_vol:.2%}",
+      "Ratio de Sharpe": f"{sharpe_ratio:.2f}",
+      "Máxima Caída": f"{max_drawdown:.2%}",
+  }
+  
+  if benchmark_returns is not None:
+      # Benchmark Metrics
+      benchmark_total = (benchmark_returns + 1).prod() - 1
+      benchmark_annual = benchmark_returns.mean() * 252
+      benchmark_vol = benchmark_returns.std() * np.sqrt(252)
+      benchmark_sharpe = benchmark_annual / benchmark_vol if benchmark_vol != 0 else np.nan
+      benchmark_rolling_max = (benchmark_returns + 1).cumprod().cummax()
+      benchmark_drawdown = (benchmark_returns + 1).cumprod() / benchmark_rolling_max - 1
+      benchmark_max_dd = benchmark_drawdown.min()
+  
+      metrics["Benchmark (Igual Ponderación)"] = {
+          "Rendimiento Total": f"{benchmark_total:.2%}",
+          "Rendimiento Anualizado": f"{benchmark_annual:.2%}",
+          "Volatilidad Anualizada": f"{benchmark_vol:.2%}",
+          "Ratio de Sharpe": f"{benchmark_sharpe:.2f}",
+          "Máxima Caída": f"{benchmark_max_dd:.2%}",
+      }
+  
+  return metrics
+
 if strategy_type == "Trading de Pares":
+  # ---------- Trading de Pares ----------
   ticker1 = st.sidebar.text_input("Símbolo de la Primera Acción", value=default_ticker1).upper()
   ticker2 = st.sidebar.text_input("Símbolo de la Segunda Acción", value=default_ticker2).upper()
 
@@ -70,8 +114,8 @@ if strategy_type == "Trading de Pares":
   end_date = st.sidebar.date_input("Fecha de Fin", value=datetime.today())
 
   zscore_window = st.sidebar.number_input("Ventana de Z-Score (Días)", min_value=5, max_value=252, value=30, step=1)
-  entry_zscore = st.sidebar.number_input("Umbral de Entrada (Z-Score)", min_value=0.1, max_value=3.0, value=1.0, step=0.1)
-  exit_zscore = st.sidebar.number_input("Umbral de Salida (Z-Score)", min_value=0.0, max_value=2.0, value=0.5, step=0.1)
+  entry_zscore = st.sidebar.number_input("Umbral de Entrada (Z-Score)", min_value=0.1, max_value=5.0, value=1.0, step=0.1)
+  exit_zscore = st.sidebar.number_input("Umbral de Salida (Z-Score)", min_value=0.0, max_value=5.0, value=0.5, step=0.1)
 
   max_allocation = st.sidebar.number_input("Asignación Máxima a una Acción Individual (%)", min_value=10, max_value=100, value=50, step=5)
   max_allocation /= 100  # Convert to decimal
@@ -90,7 +134,7 @@ if strategy_type == "Trading de Pares":
       st.stop()
 
   # Combine Data into a DataFrame
-  data = pd.DataFrame({ticker1: stock1, ticker2: stock2}).dropna()
+  data = pd.concat([stock1, stock2], axis=1).dropna()
 
   if data.empty:
       st.error("❌ **No hay datos superpuestos entre las fechas seleccionadas.** Por favor, ajusta el rango de fechas o los símbolos de las acciones.")
@@ -98,55 +142,55 @@ if strategy_type == "Trading de Pares":
 
   # Calculate Spread and Z-Score
   data['Spread'] = data[ticker1] - data[ticker2]
-  data['Spread_Mean'] = data['Spread'].rolling(window=zscore_window).mean()
-  data['Spread_STD'] = data['Spread'].rolling(window=zscore_window).std()
+  data['Spread_Mean'] = data['Spread'].rolling(window=zscore_window, min_periods=1).mean()
+  data['Spread_STD'] = data['Spread'].rolling(window=zscore_window, min_periods=1).std()
   data['Z-Score'] = (data['Spread'] - data['Spread_Mean']) / data['Spread_STD']
 
   # Backtesting Logic with Cash Position and Advanced Allocation
   def backtest_pairs_adaptive(data, entry_threshold, exit_threshold, max_alloc):
-      # Initialize positions and returns
-      weights_t1 = []
-      weights_t2 = []
-      weights_cash = []
-      returns = []
-      daily_returns = data[[ticker1, ticker2]].pct_change().fillna(0)
+      # Initialize allocations
+      allocations = pd.DataFrame(index=data.index, columns=['Weight_' + ticker1, 'Weight_' + ticker2, 'Weight_Cash'])
+      allocations.iloc[:] = 0  # Start with all cash
+
+      # Conditions for entering and exiting positions
+      entry_condition = data['Z-Score'].abs() >= entry_threshold
+      exit_condition = data['Z-Score'].abs() <= exit_threshold
+
+      # Signals
+      data['Signal'] = None
+      current_position = None  # None, 'Long Spread', 'Short Spread'
 
       for i in range(len(data)):
-          z = data['Z-Score'].iloc[i]
-
-          # Calculate allocation weights based on z-score
-          z_abs = abs(z)
-          if z_abs >= entry_threshold:
-              # Proportional allocation based on z-score magnitude
-              weight = min((z_abs - exit_threshold) / (entry_threshold - exit_threshold), 1) * max_alloc
-              weight = min(weight, max_alloc)  # Cap at maximum allocation
-              if z > 0:
-                  # Overweight ticker2
-                  w_t1 = (1 - weight) * (1 - max_alloc)  # Remaining allocation
-                  w_t2 = weight
-              else:
-                  # Overweight ticker1
-                  w_t1 = weight
-                  w_t2 = (1 - weight) * (1 - max_alloc)
-              w_cash = 1 - (w_t1 + w_t2)
+          if entry_condition.iloc[i]:
+              z = data['Z-Score'].iloc[i]
+              if z > 0 and current_position != 'Short Spread':
+                  # Short Spread: Short ticker1, Long ticker2
+                  allocations.iloc[i] = [-(max_alloc / 2), (max_alloc / 2), 1 - max_alloc]
+                  data['Signal'].iloc[i] = 'Short Spread'
+                  current_position = 'Short Spread'
+              elif z < 0 and current_position != 'Long Spread':
+                  # Long Spread: Long ticker1, Short ticker2
+                  allocations.iloc[i] = [(max_alloc / 2), -(max_alloc / 2), 1 - max_alloc]
+                  data['Signal'].iloc[i] = 'Long Spread'
+                  current_position = 'Long Spread'
+          elif exit_condition.iloc[i]:
+              # Exit to Cash
+              allocations.iloc[i] = [0, 0, 1]
+              if current_position is not None:
+                  data['Signal'].iloc[i] = 'Exit'
+                  current_position = None
           else:
-              # No strong signal, move to cash
-              w_t1 = 0
-              w_t2 = 0
-              w_cash = 1
+              if i > 0:
+                  allocations.iloc[i] = allocations.iloc[i-1]
+      
+      # Fill initial positions if any
+      allocations.fillna(method='ffill', inplace=True)
+      allocations.fillna(0, inplace=True)  # If still NaN, set to 0
 
-          # Record weights
-          weights_t1.append(w_t1)
-          weights_t2.append(w_t2)
-          weights_cash.append(w_cash)
-
-          # Calculate daily portfolio return
-          daily_ret = (w_t1 * daily_returns[ticker1].iloc[i] +
-                       w_t2 * daily_returns[ticker2].iloc[i] +
-                       w_cash * 0)  # Cash earns zero return
-          returns.append(daily_ret)
-
-      strategy_returns = pd.Series(returns, index=data.index)
+      # Calculate daily portfolio returns
+      daily_returns = data[[ticker1, ticker2]].pct_change().fillna(0)
+      strategy_returns = (allocations.shift(1) * daily_returns).sum(axis=1)
+      strategy_returns.fillna(0, inplace=True)
       cumulative_strategy = (1 + strategy_returns).cumprod()
 
       # Benchmark: Equal-weighted portfolio held throughout
@@ -154,47 +198,31 @@ if strategy_type == "Trading de Pares":
       benchmark_returns = daily_returns.dot(benchmark_weights)
       cumulative_benchmark = (1 + benchmark_returns).cumprod()
 
-      # Store weights in DataFrame
-      weights_df = pd.DataFrame({
-          'Weight_' + ticker1: weights_t1,
-          'Weight_' + ticker2: weights_t2,
-          'Weight_Cash': weights_cash
-      }, index=data.index)
-
-      return strategy_returns, cumulative_strategy, cumulative_benchmark, benchmark_returns, weights_df
+      return strategy_returns, cumulative_strategy, cumulative_benchmark, benchmark_returns, allocations
 
   # Execute Backtest
-  results = backtest_pairs_adaptive(
+  strategy_returns, cumulative_strategy, cumulative_benchmark, benchmark_returns, allocations = backtest_pairs_adaptive(
       data, entry_zscore, exit_zscore, max_allocation
   )
-  strategy_returns, cumulative_strategy, cumulative_benchmark, benchmark_returns, weights_df = results
 
-  # Combine weights with data
-  data = pd.concat([data, weights_df], axis=1)
+  # Performance Metrics
+  st.header("📊 Métricas de Rendimiento")
+  st.markdown("""
+  La tabla a continuación resume las métricas clave de rendimiento para la estrategia adaptativa y el benchmark.
+  """)
 
-  # Generate Trade Signals for Display
-  def generate_signals_adaptive(weights_df):
-      signals = []
-      prev_signal = None  # Track the last signal
+  metrics = calculate_metrics(strategy_returns, benchmark_returns)
 
-      for idx, row in weights_df.iterrows():
-          w_t1 = row['Weight_' + ticker1]
-          w_t2 = row['Weight_' + ticker2]
+  metrics_df = pd.DataFrame(metrics).T
+  st.table(metrics_df)
 
-          # Determine the current signal based on weights
-          if w_t1 > 0 and (prev_signal != 'Comprar'):
-              signals.append('Comprar')
-              prev_signal = 'Comprar'
-          elif w_t2 > 0 and (prev_signal != 'Vender'):
-              signals.append('Vender')
-              prev_signal = 'Vender'
-          else:
-              signals.append('Mantener')  # No change
-
-      return signals
-
-  data['Signal'] = generate_signals_adaptive(weights_df)
+  # Trade Signals Table
+  st.header("📋 Señales de Asignación")
+  st.markdown("""
+  La tabla a continuación detalla los momentos en que las asignaciones del portafolio cambiaron en función de las señales del z-score.
+  """)
   signal_df = data[['Signal']].dropna()
+  st.write(signal_df)
 
   # Visualization with Plotly
 
@@ -224,7 +252,6 @@ if strategy_type == "Trading de Pares":
       xaxis_title="Fecha",
       yaxis_title="Precio",
       hovermode='x unified',
-      width=1000,
       height=500
   )
 
@@ -277,24 +304,42 @@ if strategy_type == "Trading de Pares":
       line=dict(color='green', dash='dash')
   ))
 
-  # Plot Allocation Changes
-  allocation_changes = data[data['Signal'].notnull()]
-  fig_zscore.add_trace(go.Scatter(
-      x=allocation_changes.index,
-      y=allocation_changes['Z-Score'],
-      mode='markers',
-      name='Cambio de Asignación',
-      marker=dict(symbol='circle', color='purple', size=10),
-      hovertemplate='Fecha: %{x}<br>Señal: %{text}',
-      text=allocation_changes['Signal']
-  ))
+  # Plot Trade Signals
+  signals = data[['Signal']].dropna()
+  for idx, row in signals.iterrows():
+      if row['Signal'] == 'Long Spread':
+          fig_zscore.add_trace(go.Scatter(
+              x=[idx],
+              y=[data.loc[idx, 'Z-Score']],
+              mode='markers',
+              name='Long Spread',
+              marker=dict(symbol='triangle-up', color='green', size=12),
+              showlegend=False
+          ))
+      elif row['Signal'] == 'Short Spread':
+          fig_zscore.add_trace(go.Scatter(
+              x=[idx],
+              y=[data.loc[idx, 'Z-Score']],
+              mode='markers',
+              name='Short Spread',
+              marker=dict(symbol='triangle-down', color='red', size=12),
+              showlegend=False
+          ))
+      elif row['Signal'] == 'Exit':
+          fig_zscore.add_trace(go.Scatter(
+              x=[idx],
+              y=[data.loc[idx, 'Z-Score']],
+              mode='markers',
+              name='Exit',
+              marker=dict(symbol='circle', color='black', size=8),
+              showlegend=False
+          ))
 
   fig_zscore.update_layout(
       title="Z-Score con Señales de Asignación",
       xaxis_title="Fecha",
       yaxis_title="Z-Score",
       hovermode='x unified',
-      width=1000,
       height=500
   )
 
@@ -310,26 +355,29 @@ if strategy_type == "Trading de Pares":
 
   fig_alloc.add_trace(go.Scatter(
       x=data.index,
-      y=data['Weight_' + ticker1],
+      y=allocations['Weight_' + ticker1],
       mode='lines',
       name='Asignación a ' + ticker1,
-      stackgroup='one'
+      stackgroup='one',
+      fill='tonexty'
   ))
 
   fig_alloc.add_trace(go.Scatter(
       x=data.index,
-      y=data['Weight_' + ticker2],
+      y=allocations['Weight_' + ticker2],
       mode='lines',
       name='Asignación a ' + ticker2,
-      stackgroup='one'
+      stackgroup='one',
+      fill='tonexty'
   ))
 
   fig_alloc.add_trace(go.Scatter(
       x=data.index,
-      y=data['Weight_Cash'],
+      y=allocations['Weight_Cash'],
       mode='lines',
       name='Asignación a Efectivo',
-      stackgroup='one'
+      stackgroup='one',
+      fill='tonexty'
   ))
 
   fig_alloc.update_layout(
@@ -338,7 +386,6 @@ if strategy_type == "Trading de Pares":
       yaxis_title="Porcentaje de Asignación",
       yaxis=dict(range=[0, 1]),
       hovermode='x unified',
-      width=1000,
       height=500
   )
 
@@ -373,75 +420,23 @@ if strategy_type == "Trading de Pares":
       xaxis_title="Fecha",
       yaxis_title="Rendimiento Acumulado",
       hovermode='x unified',
-      width=1000,
       height=500
   )
 
   st.plotly_chart(fig_cum_returns, use_container_width=True)
 
-  # Performance Metrics
-  st.header("📊 Métricas de Rendimiento")
-  st.markdown("""
-  La tabla a continuación resume las métricas clave de rendimiento para la estrategia adaptativa y el benchmark.
-  """)
-
-  def calculate_metrics(strategy_returns, benchmark_returns, cumulative_strategy, cumulative_benchmark):
-      # Strategy Metrics
-      total_return = cumulative_strategy.iloc[-1] - 1
-      annual_return = strategy_returns.mean() * 252
-      annual_vol = strategy_returns.std() * np.sqrt(252)
-      sharpe_ratio = annual_return / annual_vol if annual_vol != 0 else np.nan
-      max_drawdown = (cumulative_strategy / cumulative_strategy.cummax() - 1).min()
-
-      # Benchmark Metrics
-      benchmark_total = cumulative_benchmark.iloc[-1] - 1
-      benchmark_annual = benchmark_returns.mean() * 252
-      benchmark_vol = benchmark_returns.std() * np.sqrt(252)
-      benchmark_sharpe = benchmark_annual / benchmark_vol if benchmark_vol != 0 else np.nan
-      benchmark_max_dd = (cumulative_benchmark / cumulative_benchmark.cummax() - 1).min()
-
-      metrics = {
-          "Estrategia Adaptativa": {
-              "Rendimiento Total": f"{total_return:.2%}",
-              "Rendimiento Anualizado": f"{annual_return:.2%}",
-              "Volatilidad Anualizada": f"{annual_vol:.2%}",
-              "Ratio de Sharpe": f"{sharpe_ratio:.2f}",
-              "Máxima Caída": f"{max_drawdown:.2%}",
-          },
-          "Benchmark (Igual Ponderación)": {
-              "Rendimiento Total": f"{benchmark_total:.2%}",
-              "Rendimiento Anualizado": f"{benchmark_annual:.2%}",
-              "Volatilidad Anualizada": f"{benchmark_vol:.2%}",
-              "Ratio de Sharpe": f"{benchmark_sharpe:.2f}",
-              "Máxima Caída": f"{benchmark_max_dd:.2%}",
-          }
-      }
-      return metrics
-
-  # Calculate Metrics
-  metrics = calculate_metrics(strategy_returns, benchmark_returns, cumulative_strategy, cumulative_benchmark)
-
-  # Display Metrics in a Table
-  metrics_df = pd.DataFrame(metrics).T
-  st.table(metrics_df)
-
-  # Trade Signals Table
-  st.header("📋 Señales de Asignación")
-  st.markdown("""
-  La tabla a continuación detalla los momentos en que las asignaciones del portafolio cambiaron en función de las señales del z-score.
-  """)
-  st.write(signal_df.dropna())
-
 elif strategy_type == "Estrategia de Acción Única":
-  # User Inputs for single stock strategy
-  single_ticker = st.sidebar.text_input("Símbolo de la Acción", value=default_ticker1).upper()
+  # ---------- Estrategia de Acción Única ----------
+  default_ticker = default_ticker1  # Reuse default_ticker1 as the default single stock
 
-  start_date = st.sidebar.date_input("Fecha de Inicio", value=datetime(2020, 1, 1))
-  end_date = st.sidebar.date_input("Fecha de Fin", value=datetime.today())
+  single_ticker = st.sidebar.text_input("Símbolo de la Acción", value=default_ticker).upper()
+
+  start_date = st.sidebar.date_input("Fecha de Inicio", value=datetime(2020, 1, 1), key="single_start")
+  end_date = st.sidebar.date_input("Fecha de Fin", value=datetime.today(), key="single_end")
 
   zscore_window = st.sidebar.number_input("Ventana de Z-Score (Días)", min_value=5, max_value=252, value=30, step=1)
-  entry_zscore = st.sidebar.number_input("Umbral de Entrada (Z-Score)", min_value=0.1, max_value=3.0, value=1.0, step=0.1)
-  exit_zscore = st.sidebar.number_input("Umbral de Salida (Z-Score)", min_value=0.0, max_value=2.0, value=0.5, step=0.1)
+  entry_zscore = st.sidebar.number_input("Umbral de Entrada (Z-Score)", min_value=0.1, max_value=5.0, value=1.0, step=0.1)
+  exit_zscore = st.sidebar.number_input("Umbral de Salida (Z-Score)", min_value=0.0, max_value=5.0, value=0.5, step=0.1)
 
   # Validate Date Inputs
   if start_date >= end_date:
@@ -456,62 +451,110 @@ elif strategy_type == "Estrategia de Acción Única":
       st.stop()
 
   # Prepare DataFrame for single stock
-  single_stock_df = pd.DataFrame(single_stock_data).dropna()
-  single_stock_df = single_stock_df.reset_index()  # Reset index to have a date column
+  single_stock_df = pd.DataFrame(single_stock_data).reset_index()
+  single_stock_df.rename(columns={'Adj Close': 'Adj_Close'}, inplace=True)
+  single_stock_df.dropna(inplace=True)
 
   # Generate Signals for Single Stock
-  def generate_signals_single_stock(stock_data, zscore_window, entry_threshold, exit_threshold):
-      # Calculate Z-Score
-      stock_data['Mean'] = stock_data['Adj Close'].rolling(window=zscore_window).mean()
-      stock_data['STD'] = stock_data['Adj Close'].rolling(window=zscore_window).std()
-      stock_data['Z-Score'] = (stock_data['Adj Close'] - stock_data['Mean']) / stock_data['STD']
+  def generate_signals_single_stock(df, z_window, entry_thresh, exit_thresh):
+      df['Mean'] = df['Adj_Close'].rolling(window=z_window, min_periods=1).mean()
+      df['STD'] = df['Adj_Close'].rolling(window=z_window, min_periods=1).std()
+      df['Z-Score'] = (df['Adj_Close'] - df['Mean']) / df['STD']
 
-      signals = []
-      prev_signal = None  # Track the last signal
+      df['Signal'] = 'Mantener'
+      position = 0  # 1 for holding the stock, 0 for not holding
 
-      for z in stock_data['Z-Score']:
-          if z >= entry_threshold and prev_signal != 'Comprar':
-              signals.append('Comprar')
-              prev_signal = 'Comprar'
-          elif z <= -entry_threshold and prev_signal != 'Vender':
-              signals.append('Vender')
-              prev_signal = 'Vender'
-          else:
-              signals.append('Mantener')  # No change
+      for i in range(len(df)):
+          z = df['Z-Score'].iloc[i]
+          if z >= entry_thresh and position == 0:
+              df.at[i, 'Signal'] = 'Comprar'
+              position = 1
+          elif z <= -entry_thresh and position == 0:
+              df.at[i, 'Signal'] = 'Comprar'
+              position = 1
+          elif z <= exit_thresh and position == 1:
+              df.at[i, 'Signal'] = 'Vender'
+              position = 0
+          elif z >= -exit_thresh and position == 1:
+              df.at[i, 'Signal'] = 'Vender'
 
-      stock_data['Signal'] = signals
-      return stock_data[['Adj Close', 'Z-Score', 'Signal']]
+      return df
 
   # Generate signals for the single stock
-  single_stock_signals = generate_signals_single_stock(single_stock_df, zscore_window, entry_zscore, exit_zscore)
+  single_stock_df = generate_signals_single_stock(single_stock_df, zscore_window, entry_zscore, exit_zscore)
 
-  # Display the signals
-  st.header(f"📈 Señales para {single_ticker}")
-  st.write(single_stock_signals)
+  # Calculate Positions
+  single_stock_df['Position'] = 0
+  single_stock_df['Position'] = np.where(single_stock_df['Signal'] == 'Comprar', 1, single_stock_df['Position'])
+  single_stock_df['Position'] = np.where(single_stock_df['Signal'] == 'Vender', 0, single_stock_df['Position'])
+  single_stock_df['Position'] = single_stock_df['Position'].ffill().fillna(0)
 
-  # Visualization for Single Stock
-  st.header("📊 Gráficos para la Acción Única")
-  
+  # Calculate Daily Returns
+  single_stock_df['Daily_Return'] = single_stock_df['Adj_Close'].pct_change().fillna(0)
+  single_stock_df['Strategy_Return'] = single_stock_df['Position'].shift(1) * single_stock_df['Daily_Return']
+  single_stock_df['Strategy_Return'].fillna(0, inplace=True)
+
+  # Calculate Cumulative Returns
+  single_stock_df['Cumulative_Strategy'] = (1 + single_stock_df['Strategy_Return']).cumprod()
+  single_stock_df['Cumulative_Buy_Hold'] = (1 + single_stock_df['Daily_Return']).cumprod()
+
+  # Performance Metrics
+  st.header("📊 Métricas de Rendimiento")
+  st.markdown("""
+  La tabla a continuación resume las métricas clave de rendimiento para la estrategia de acción única y el benchmark de compra y mantenimiento.
+  """)
+
+  metrics_strategy = single_stock_df['Strategy_Return']
+  metrics_buy_hold = single_stock_df['Daily_Return']
+
+  metrics = calculate_metrics(metrics_strategy, metrics_buy_hold)
+
+  metrics_df = pd.DataFrame(metrics).T
+  st.table(metrics_df)
+
+  # Trade Signals Table
+  st.header("📋 Señales de Trading")
+  st.markdown("""
+  La tabla a continuación detalla los momentos en que las señales de compra y venta fueron generadas en función del z-score.
+  """)
+  signals_df = single_stock_df[single_stock_df['Signal'] != 'Mantener'][['Date', 'Signal']].reset_index(drop=True)
+  st.write(signals_df)
+
+  # Visualization with Plotly
+
   # 1. Adjusted Close Price Plot
-  st.subheader("📈 Precio Ajustado de la Acción")
+  st.header("📊 Precio Ajustado de la Acción")
+  st.markdown("""
+  Este gráfico muestra el precio ajustado de cierre de la acción seleccionada a lo largo del período elegido.
+  """)
   fig_price = go.Figure()
+
   fig_price.add_trace(go.Scatter(
       x=single_stock_df['Date'],
-      y=single_stock_df['Adj Close'],
+      y=single_stock_df['Adj_Close'],
       mode='lines',
       name='Precio Ajustado'
   ))
+
   fig_price.update_layout(
       title=f"Precio Ajustado de {single_ticker}",
       xaxis_title="Fecha",
       yaxis_title="Precio Ajustado",
-      hovermode='x unified'
+      hovermode='x unified',
+      height=500
   )
+
   st.plotly_chart(fig_price, use_container_width=True)
 
   # 2. Z-Score Plot with Buy/Sell Signals
-  st.subheader("📈 Z-Score de la Acción con Señales de Compra/Venta")
-  fig_zscore_single = go.Figure()
+  st.header("📈 Z-Score de la Acción con Señales de Compra/Venta")
+  st.markdown("""
+  Este gráfico muestra el z-score de la acción, junto con los umbrales de entrada y salida. Ilustra cómo la estrategia genera señales de compra y venta en función del z-score.
+  """)
+
+  fig_zscore_single = make_subplots(rows=1, cols=1, shared_xaxes=True)
+
+  # Plot Z-Score
   fig_zscore_single.add_trace(go.Scatter(
       x=single_stock_df['Date'],
       y=single_stock_df['Z-Score'],
@@ -519,6 +562,8 @@ elif strategy_type == "Estrategia de Acción Única":
       name='Z-Score',
       line=dict(color='blue')
   ))
+
+  # Plot Thresholds
   fig_zscore_single.add_trace(go.Scatter(
       x=single_stock_df['Date'],
       y=[entry_zscore]*len(single_stock_df),
@@ -557,7 +602,7 @@ elif strategy_type == "Estrategia de Acción Única":
       y=buy_signals['Z-Score'],
       mode='markers',
       name='Señales de Compra',
-      marker=dict(symbol='triangle-up', color='green', size=10),
+      marker=dict(symbol='triangle-up', color='green', size=12),
       hovertemplate='Fecha: %{x}<br>Señal: Comprar'
   ))
   
@@ -566,7 +611,7 @@ elif strategy_type == "Estrategia de Acción Única":
       y=sell_signals['Z-Score'],
       mode='markers',
       name='Señales de Venta',
-      marker=dict(symbol='triangle-down', color='red', size=10),
+      marker=dict(symbol='triangle-down', color='red', size=12),
       hovertemplate='Fecha: %{x}<br>Señal: Vender'
   ))
 
@@ -574,89 +619,79 @@ elif strategy_type == "Estrategia de Acción Única":
       title=f"Z-Score de {single_ticker} con Señales de Compra/Venta",
       xaxis_title="Fecha",
       yaxis_title="Z-Score",
-      hovermode='x unified'
+      hovermode='x unified',
+      height=500
   )
   st.plotly_chart(fig_zscore_single, use_container_width=True)
 
   # 3. Asignación de Portafolio a lo Largo del Tiempo
   st.header("📈 Asignación de Portafolio a lo Largo del Tiempo")
   st.markdown("""
-  Este gráfico muestra cómo cambian las asignaciones del portafolio a la acción y a efectivo a lo largo del tiempo, basándose en las señales del z-score.
+  Este gráfico muestra cómo cambia la asignación del portafolio a la acción y a efectivo a lo largo del tiempo, basándose en las señales del z-score.
   """)
 
-  # Calculate Portfolio Allocation
-  single_stock_df['Weight'] = np.where(single_stock_df['Signal'] == 'Comprar', 1, 0)  # 100% in stock when buying
-  single_stock_df['Weight'] = np.where(single_stock_df['Signal'] == 'Vender', 0, single_stock_df['Weight'])  # 0% when selling
-  single_stock_df['Weight'] = single_stock_df['Weight'].ffill().fillna(0)  # Forward fill to maintain position
+  fig_alloc_single = go.Figure()
 
-  fig_alloc = go.Figure()
-  fig_alloc.add_trace(go.Scatter(
+  fig_alloc_single.add_trace(go.Scatter(
       x=single_stock_df['Date'],
-      y=single_stock_df['Weight'],
+      y=single_stock_df['Position'],
       mode='lines',
-      name='Asignación a ' + single_ticker,
+      name='Posición en Acción',
       line=dict(color='blue')
   ))
 
-  fig_alloc.update_layout(
+  fig_alloc_single.add_trace(go.Scatter(
+      x=single_stock_df['Date'],
+      y=1 - single_stock_df['Position'],
+      mode='lines',
+      name='Posición en Efectivo',
+      line=dict(color='orange')
+  ))
+
+  fig_alloc_single.update_layout(
       title="Asignación de Portafolio a lo Largo del Tiempo",
       xaxis_title="Fecha",
       yaxis_title="Porcentaje de Asignación",
       yaxis=dict(range=[0, 1]),
-      hovermode='x unified'
+      hovermode='x unified',
+      height=500
   )
 
-  st.plotly_chart(fig_alloc, use_container_width=True)
+  st.plotly_chart(fig_alloc_single, use_container_width=True)
 
   # 4. Cumulative Returns Plot
-  st.header("📈 Rendimiento Acumulado de la Estrategia")
+  st.header("📈 Rendimiento Acumulado de la Estrategia vs. Benchmark")
   st.markdown("""
   Este gráfico compara los rendimientos acumulados de la estrategia de trading contra un benchmark de compra y mantenimiento.
   """)
 
-  # Calculate Buy and Hold Returns
-  single_stock_df['Buy_Hold_Returns'] = single_stock_df['Adj Close'] / single_stock_df['Adj Close'].iloc[0] - 1
+  fig_cum_returns_single = make_subplots(rows=1, cols=1, shared_xaxes=True)
 
-  # Calculate Trading Strategy Returns
-  trading_returns = []
-  position = 0  # 1 for holding the stock, 0 for not holding
-  for i in range(len(single_stock_df)):
-      if single_stock_df['Signal'].iloc[i] == 'Comprar':
-          position = 1  # Buy
-      elif single_stock_df['Signal'].iloc[i] == 'Vender':
-          position = 0  # Sell
-
-      if position == 1:
-          trading_returns.append(single_stock_df['Adj Close'].iloc[i] / single_stock_df['Adj Close'].iloc[0] - 1)
-      else:
-          trading_returns.append(trading_returns[-1] if trading_returns else 0)  # Hold previous return
-
-  single_stock_df['Trading_Returns'] = trading_returns
-
-  # Create the comparison figure
-  fig_comparison = go.Figure()
-  fig_comparison.add_trace(go.Scatter(
+  fig_cum_returns_single.add_trace(go.Scatter(
       x=single_stock_df['Date'],
-      y=single_stock_df['Buy_Hold_Returns'],
-      mode='lines',
-      name='Compra y Mantenimiento',
-      line=dict(color='blue')
-  ))
-  fig_comparison.add_trace(go.Scatter(
-      x=single_stock_df['Date'],
-      y=single_stock_df['Trading_Returns'],
+      y=single_stock_df['Cumulative_Strategy'],
       mode='lines',
       name='Estrategia de Trading',
       line=dict(color='purple')
   ))
 
-  fig_comparison.update_layout(
-      title=f"Comparación de Estrategia de Compra y Mantenimiento vs Estrategia de Trading para {single_ticker}",
+  fig_cum_returns_single.add_trace(go.Scatter(
+      x=single_stock_df['Date'],
+      y=single_stock_df['Cumulative_Buy_Hold'],
+      mode='lines',
+      name='Compra y Mantenimiento',
+      line=dict(color='grey')
+  ))
+
+  fig_cum_returns_single.update_layout(
+      title="Rendimiento Acumulado",
       xaxis_title="Fecha",
       yaxis_title="Rendimiento Acumulado",
-      hovermode='x unified'
+      hovermode='x unified',
+      height=500
   )
-  st.plotly_chart(fig_comparison, use_container_width=True)
+
+  st.plotly_chart(fig_cum_returns_single, use_container_width=True)
 
 # Footer Disclaimer
 st.markdown("""
