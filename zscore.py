@@ -152,57 +152,60 @@ if strategy_type == "Trading de Pares":
   data['Z-Score'] = (data['Spread'] - data['Spread_Mean']) / data['Spread_STD']
 
   # Lógica de Backtesting con Posición en Efectivo y Asignación Avanzada (Sin Venta en Corto)
+  # Lógica de Backtesting con Posición en Efectivo y Asignación Avanzada (Sin Venta en Corto)
   def backtest_pairs_adaptive_no_short(data, ticker1, ticker2, entry_threshold, exit_threshold, max_alloc):
-      # Inicializar asignaciones
+    # Inicializar asignaciones
       allocations = pd.DataFrame(index=data.index, columns=['Weight_' + ticker1, 'Weight_' + ticker2, 'Weight_Cash'])
       allocations.iloc[:] = 0  # Comenzar con todo en efectivo
-
+    
       # Condiciones para entrar y salir de posiciones
       entry_condition = data['Z-Score'].abs() >= entry_threshold
       exit_condition = data['Z-Score'].abs() <= exit_threshold
-
+    
       # Señales
       data['Signal'] = None
       current_position = None  # Ninguna, 'Overweight ticker1', 'Overweight ticker2'
-
+    
       for i in range(len(data)):
           if entry_condition.iloc[i]:
               z = data['Z-Score'].iloc[i]
               if z > 0 and current_position != f'Overweight {ticker2}':
-                  # Sobreponderar ticker2 y asignar resto a ticker1
-                  allocations.iloc[i] = [(1 - max_alloc), max_alloc, 0]
+                  # Sobreponderar ticker2
+                  allocations.iloc[i] = [0, max_alloc, 1 - max_alloc]  # Asignar a ticker2 y efectivo
                   data['Signal'].iloc[i] = f'Overweight {ticker2}'
                   current_position = f'Overweight {ticker2}'
               elif z < 0 and current_position != f'Overweight {ticker1}':
-                  # Sobreponderar ticker1 y asignar resto a ticker2
-                  allocations.iloc[i] = [max_alloc, (1 - max_alloc), 0]
+                  # Sobreponderar ticker1
+                  allocations.iloc[i] = [max_alloc, 0, 1 - max_alloc]  # Asignar a ticker1 y efectivo
                   data['Signal'].iloc[i] = f'Overweight {ticker1}'
                   current_position = f'Overweight {ticker1}'
           elif exit_condition.iloc[i]:
               # Salir a Efectivo
-              allocations.iloc[i] = [0, 0, 1]
+              allocations.iloc[i] = [0, 0, 1]  # Todo en efectivo
               if current_position is not None:
                   data['Signal'].iloc[i] = 'Exit to Cash'
                   current_position = None
           else:
               if i > 0:
-                  allocations.iloc[i] = allocations.iloc[i-1]
-      
+                  allocations.iloc[i] = allocations.iloc[i-1]  # Mantener la última asignación
+    
       # Rellenar posiciones iniciales si es necesario
       allocations.fillna(method='ffill', inplace=True)
       allocations.fillna(0, inplace=True)  # Si aún hay NaN, asignar todo a efectivo
-
+    
       # Calcular retornos diarios del portafolio
       daily_returns = data[[ticker1, ticker2]].pct_change().fillna(0)
-      strategy_returns = (allocations.shift(1) * daily_returns).sum(axis=1)
-      strategy_returns.fillna(0, inplace=True)
-      cumulative_strategy = (1 + strategy_returns).cumprod()
-
+      strategy_returns = (allocations.shift(1) * daily_returns).sum(axis=1)  # Usar shift para evitar look-ahead bias
+      strategy_returns.fillna(0, inplace=True)  # Asegurarse de que no haya NaN en los retornos
+    
+      # Calcular retornos acumulados
+      cumulative_strategy = (1 + strategy_returns).cumprod()  # Cálculo correcto de retornos acumulados
+    
       # Benchmark: Portafolio igual ponderado mantenido constantemente
       benchmark_weights = np.array([0.5, 0.5])
       benchmark_returns = daily_returns.dot(benchmark_weights)
       cumulative_benchmark = (1 + benchmark_returns).cumprod()
-
+    
       return strategy_returns, cumulative_strategy, cumulative_benchmark, benchmark_returns, allocations
 
   # Ejecutar Backtest
