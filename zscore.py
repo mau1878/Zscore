@@ -175,45 +175,50 @@ data = pd.concat([data, weights_df], axis=1)
 
 # Generate Trade Signals for Display
 def generate_signals_adaptive(weights_df):
-    signals = []
-    prev_w_t1 = 0
-    prev_w_t2 = 0
-    prev_w_cash = 1
+  signals = []
+  prev_w_t1 = 0
+  prev_w_t2 = 0
+  prev_w_cash = 1
 
-    for idx, row in weights_df.iterrows():
-        w_t1 = row['Weight_' + ticker1]
-        w_t2 = row['Weight_' + ticker2]
-        w_cash = row['Weight_Cash']
+  for idx, row in weights_df.iterrows():
+      w_t1 = row['Weight_' + ticker1]
+      w_t2 = row['Weight_' + ticker2]
+      w_cash = row['Weight_Cash']
 
-        signal = None
-        percentage_change_t1 = ((w_t1 - prev_w_t1) / prev_w_t1 * 100) if prev_w_t1 > 0 else (100 if w_t1 > 0 else 0)
-        percentage_change_t2 = ((w_t2 - prev_w_t2) / prev_w_t2 * 100) if prev_w_t2 > 0 else (100 if w_t2 > 0 else 0)
-        percentage_change_cash = ((w_cash - prev_w_cash) / prev_w_cash * 100) if prev_w_cash > 0 else (100 if w_cash > 0 else 0)
+      signal = None
+      
+      # Calculate percentage changes
+      percentage_change_t1 = ((w_t1 - prev_w_t1) / prev_w_t1 * 100) if prev_w_t1 > 0 else (100 if w_t1 > 0 else 0)
+      percentage_change_t2 = ((w_t2 - prev_w_t2) / prev_w_t2 * 100) if prev_w_t2 > 0 else (100 if w_t2 > 0 else 0)
+      percentage_change_cash = ((w_cash - prev_w_cash) / prev_w_cash * 100) if prev_w_cash > 0 else (100 if w_cash > 0 else 0)
 
-        # Check for increases
-        if w_t1 > prev_w_t1:
-            signal = f'Aumentar {ticker1} ({percentage_change_t1:.2f}%)'
-        elif w_t2 > prev_w_t2:
-            signal = f'Aumentar {ticker2} ({percentage_change_t2:.2f}%)'
-        elif w_cash > prev_w_cash:
-            signal = f'Aumentar Posición en Efectivo ({percentage_change_cash:.2f}%)'
-        
-        # Check for decreases
-        if w_t1 < prev_w_t1:
-            signal = f'Disminuir {ticker1} ({percentage_change_t1:.2f}%)'
-        elif w_t2 < prev_w_t2:
-            signal = f'Disminuir {ticker2} ({percentage_change_t2:.2f}%)'
-        elif w_cash < prev_w_cash:
-            signal = f'Disminuir Posición en Efectivo ({percentage_change_cash:.2f}%)'
+      # Debugging: Print current and previous weights
+      print(f"Index: {idx}, w_t1: {w_t1}, prev_w_t1: {prev_w_t1}, w_t2: {w_t2}, prev_w_t2: {prev_w_t2}, w_cash: {w_cash}, prev_w_cash: {prev_w_cash}")
 
-        # If no signal was generated, keep the previous signal (if any)
-        if signal is None:
-            signal = 'Sin Cambio'
+      # Check for increases
+      if w_t1 > prev_w_t1:
+          signal = f'Aumentar {ticker1} ({percentage_change_t1:.2f}%)'
+      elif w_t2 > prev_w_t2:
+          signal = f'Aumentar {ticker2} ({percentage_change_t2:.2f}%)'
+      elif w_cash > prev_w_cash:
+          signal = f'Aumentar Posición en Efectivo ({percentage_change_cash:.2f}%)'
+      
+      # Check for decreases
+      if w_t1 < prev_w_t1:
+          signal = f'Disminuir {ticker1} ({percentage_change_t1:.2f}%)'
+      elif w_t2 < prev_w_t2:
+          signal = f'Disminuir {ticker2} ({percentage_change_t2:.2f}%)'
+      elif w_cash < prev_w_cash:
+          signal = f'Disminuir Posición en Efectivo ({percentage_change_cash:.2f}%)'
 
-        signals.append(signal)
-        prev_w_t1, prev_w_t2, prev_w_cash = w_t1, w_t2, w_cash
+      # If no signal was generated, keep the previous signal (if any)
+      if signal is None:
+          signal = 'Sin Cambio'
 
-    return signals
+      signals.append(signal)
+      prev_w_t1, prev_w_t2, prev_w_cash = w_t1, w_t2, w_cash
+
+  return signals
 
 data['Signal'] = generate_signals_adaptive(weights_df)
 signal_df = data[['Signal']].dropna()
