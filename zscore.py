@@ -8,8 +8,8 @@ from datetime import datetime
 
 # Configuración de la página de Streamlit
 st.set_page_config(
-page_title="📈 Adaptive Pairs Trading Backtester",
-layout="wide",
+  page_title="📈 Adaptive Pairs Trading Backtester",
+  layout="wide",
 )
 
 # Título y Descripción
@@ -17,58 +17,80 @@ st.title("📈 Adaptive Pairs Trading Backtester")
 st.markdown("""
 Bienvenido al **Adaptive Pairs Trading Backtester**!
 
-Esta herramienta te permite realizar un back-testing de una estrategia de trading de pares entre dos acciones, así como una estrategia de acción única, incorporando estrategias de asignación avanzadas y posiciones en efectivo. Está diseñada para ser útil incluso en mercados donde no se permite la venta en corto.
+Esta herramienta te permite realizar un backtesting de una estrategia de trading de pares entre dos acciones, así como una estrategia de acción única, incorporando estrategias de asignación avanzadas y posiciones en efectivo. **Nota:** La venta en corto no está disponible en Argentina, por lo que todas las posiciones son largas o en efectivo.
 
 ---
 
-**Cómo usar esta herramienta:**
+### **Cómo usar esta herramienta:**
 
 1. **Selecciona el Tipo de Estrategia:** Elige entre Trading de Pares o Estrategia de Acción Única.
 2. **Configura los Parámetros:**
-- **Ventana de Z-Score:** Número de días para calcular la media móvil y la desviación estándar del spread de precios.
-- **Umbrales de Entrada/Salida:** Niveles de z-score en los que la estrategia ajustará las asignaciones.
-- **Asignación Máxima (%):** Porcentaje máximo del portafolio que se puede asignar a cualquier acción individual.
-3. **Ejecuta el Back-Test:** La herramienta calculará el rendimiento de la estrategia y mostrará gráficos interactivos y métricas.
+  - **Ventana de Z-Score:** Número de días para calcular la media móvil y la desviación estándar del spread de precios.
+  - **Umbrales de Entrada/Salida:** Niveles de z-score en los que la estrategia ajustará las asignaciones.
+  - **Asignación Máxima (%):** Porcentaje máximo del portafolio que se puede asignar a cualquier acción individual.
+3. **Ejecuta el Backtest:** La herramienta calculará el rendimiento de la estrategia y mostrará gráficos interactivos y métricas.
 
-**Entendiendo la estrategia:**
+### **Entendiendo la estrategia:**
 
 - **Objetivo:** Obtener ganancias de los movimientos relativos de dos acciones (en el caso de Trading de Pares) o de una sola acción ajustando las asignaciones del portafolio en función del z-score de su spread de precios.
 - **Posición en Efectivo:** Cuando el spread o movimiento no indica una señal fuerte, la estrategia puede mover una porción del portafolio a efectivo para reducir la exposición al mercado.
-- **Asignación Avanzada:** Las asignaciones a cada acción (y efectivo) son proporcionales a la magnitud del z-score.
+- **Asignación Avanzada:** Las asignaciones a cada acción (y efectivo) son proporcionales a la magnitud del z-score, respetando siempre el límite de asignación máxima para evitar la venta en corto.
 
 ---
 """)
 
 # Barra lateral para Entradas del Usuario
-st.sidebar.header("Selecciona Parámetros")
+st.sidebar.header("📌 Configuración de Parámetros")
 
 # Función para obtener datos de acciones con caché y manejo de errores
 @st.cache_data(ttl=60*60)  # Cache de datos por 1 hora
 def get_stock_data(ticker, start, end, name=None):
+  """
+  Descarga datos históricos de una acción utilizando yfinance.
+
+  Parameters:
+      ticker (str): Símbolo de la acción.
+      start (datetime): Fecha de inicio.
+      end (datetime): Fecha de fin.
+      name (str, optional): Nombre personalizado para la columna.
+
+  Returns:
+      pd.Series: Serie de precios ajustados de cierre.
+  """
   try:
       data = yf.download(ticker, start=start, end=end, progress=False)
       if data.empty:
           st.error(f"No se pudo obtener datos para `{ticker}`. Por favor, verifica el símbolo de la acción.")
           return None
-      data = data['Adj Close'].dropna()
-      if name:
-          data.name = name
-      else:
-          data.name = ticker
-      return data
+      adj_close = data['Adj Close'].dropna()
+      adj_close.name = name if name else ticker
+      return adj_close
   except Exception as e:
       st.error(f"Error al obtener datos para `{ticker}`: {e}")
       return None
 
 # Entradas predeterminadas
-default_ticker1 = 'AAPL'  # Acciones por defecto
-default_ticker2 = 'MSFT'
+default_ticker1 = 'AAPL'  # Primera acción por defecto
+default_ticker2 = 'MSFT'  # Segunda acción por defecto
 
 # Selección del tipo de estrategia
-strategy_type = st.sidebar.selectbox("Selecciona el Tipo de Estrategia", ["Trading de Pares", "Estrategia de Acción Única"])
+strategy_type = st.sidebar.selectbox(
+  "Selecciona el Tipo de Estrategia",
+  ["Trading de Pares", "Estrategia de Acción Única"]
+)
 
 # Función para calcular métricas de rendimiento
 def calculate_metrics(strategy_returns, benchmark_returns=None):
+  """
+  Calcula métricas clave de rendimiento para la estrategia y el benchmark.
+
+  Parameters:
+      strategy_returns (pd.Series): Retornos diarios de la estrategia.
+      benchmark_returns (pd.Series, optional): Retornos diarios del benchmark.
+
+  Returns:
+      dict: Diccionario con las métricas calculadas.
+  """
   metrics = {}
   
   # Métricas de la Estrategia
@@ -112,17 +134,65 @@ if strategy_type == "Trading de Pares":
   # ---------- Trading de Pares ----------
   st.header("📈 Estrategia de Trading de Pares")
   
-  ticker1 = st.sidebar.text_input("Símbolo de la Primera Acción", value=default_ticker1).upper()
-  ticker2 = st.sidebar.text_input("Símbolo de la Segunda Acción", value=default_ticker2).upper()
+  # Entradas de los usuarios para los símbolos de las acciones
+  ticker1 = st.sidebar.text_input(
+      "Símbolo de la Primera Acción",
+      value=default_ticker1,
+      help="Ingresa el ticker de la primera acción (ejemplo: AAPL)."
+  ).upper()
+  
+  ticker2 = st.sidebar.text_input(
+      "Símbolo de la Segunda Acción",
+      value=default_ticker2,
+      help="Ingresa el ticker de la segunda acción (ejemplo: MSFT)."
+  ).upper()
 
-  start_date = st.sidebar.date_input("Fecha de Inicio", value=datetime(2020, 1, 1))
-  end_date = st.sidebar.date_input("Fecha de Fin", value=datetime.today())
+  # Selección de fechas
+  start_date = st.sidebar.date_input(
+      "Fecha de Inicio",
+      value=datetime(2020, 1, 1),
+      help="Selecciona la fecha de inicio para el backtest."
+  )
+  end_date = st.sidebar.date_input(
+      "Fecha de Fin",
+      value=datetime.today(),
+      help="Selecciona la fecha de fin para el backtest."
+  )
 
-  zscore_window = st.sidebar.number_input("Ventana de Z-Score (Días)", min_value=5, max_value=252, value=30, step=1)
-  entry_zscore = st.sidebar.number_input("Umbral de Entrada (Z-Score)", min_value=0.1, max_value=5.0, value=1.0, step=0.1)
-  exit_zscore = st.sidebar.number_input("Umbral de Salida (Z-Score)", min_value=0.0, max_value=5.0, value=0.5, step=0.1)
+  # Parámetros de la estrategia
+  zscore_window = st.sidebar.number_input(
+      "Ventana de Z-Score (Días)",
+      min_value=5,
+      max_value=252,
+      value=30,
+      step=1,
+      help="Número de días para calcular la media y desviación estándar del spread."
+  )
+  entry_zscore = st.sidebar.number_input(
+      "Umbral de Entrada (Z-Score)",
+      min_value=0.1,
+      max_value=5.0,
+      value=1.0,
+      step=0.1,
+      help="Nivel de z-score para generar señales de entrada."
+  )
+  exit_zscore = st.sidebar.number_input(
+      "Umbral de Salida (Z-Score)",
+      min_value=0.0,
+      max_value=5.0,
+      value=0.5,
+      step=0.1,
+      help="Nivel de z-score para cerrar posiciones y mover a efectivo."
+  )
 
-  max_allocation = st.sidebar.number_input("Asignación Máxima a una Acción Individual (%)", min_value=10, max_value=100, value=50, step=5)
+  max_allocation = st.sidebar.number_input(
+      "Asignación Máxima a una Acción Individual (%)",
+      min_value=10,
+      max_value=100,
+      value=50,
+      step=5,
+      help="Porcentaje máximo del portafolio que se puede asignar a una acción individual."
+  )
   max_allocation /= 100  # Convertir a decimal
 
   # Validar Entradas de Fechas
@@ -130,7 +200,7 @@ if strategy_type == "Trading de Pares":
       st.sidebar.error("⚠️ **La fecha de inicio debe ser anterior a la fecha de fin.**")
 
   # Obtener Datos de Acciones
-  with st.spinner("🔄 Obteniendo datos de acciones..."):
+  with st.spinner("🔄 Obteniendo datos de las acciones..."):
       stock1 = get_stock_data(ticker1, start_date, end_date)
       stock2 = get_stock_data(ticker2, start_date, end_date)
 
@@ -153,7 +223,21 @@ if strategy_type == "Trading de Pares":
 
   # Lógica de Backtesting con Posición en Efectivo y Asignación Avanzada (Sin Venta en Corto)
   def backtest_pairs_adaptive_no_short(data, ticker1, ticker2, entry_threshold, exit_threshold, max_alloc):
-      # Inicializar asignaciones con nombres de columnas que coincidan con daily_returns
+      """
+      Realiza el backtesting de una estrategia de pares ajustada sin venta en corto.
+
+      Parameters:
+          data (pd.DataFrame): Datos de precios y z-score.
+          ticker1 (str): Primer ticker.
+          ticker2 (str): Segundo ticker.
+          entry_threshold (float): Umbral de entrada para el z-score.
+          exit_threshold (float): Umbral de salida para el z-score.
+          max_alloc (float): Asignación máxima por acción.
+
+      Returns:
+          tuple: Retornos de la estrategia, retornos acumulados, benchmark acumulado, retornos del benchmark, asignaciones.
+      """
+      # Inicializar asignaciones: ticker1, ticker2 y efectivo
       allocations = pd.DataFrame(index=data.index, columns=[ticker1, ticker2, 'Cash'])
       allocations.iloc[:] = 0  # Comenzar con todo en efectivo
 
@@ -170,26 +254,26 @@ if strategy_type == "Trading de Pares":
           if entry_condition.iloc[i]:
               z = data['Z-Score'].iloc[i]
               if z > 0 and current_position != f'Overweight {ticker2}':
-                  # Sobreponderar ticker2
+                  # Asignar máximo a ticker2
                   allocations.at[idx, ticker1] = 0
                   allocations.at[idx, ticker2] = max_alloc
                   allocations.at[idx, 'Cash'] = 1 - max_alloc
-                  data.at[idx, 'Signal'] = f'Overweight {ticker2}'
-                  current_position = f'Overweight {ticker2}'
+                  data.at[idx, 'Signal'] = f'Sobreponderar {ticker2}'
+                  current_position = f'Sobreponderar {ticker2}'
               elif z < 0 and current_position != f'Overweight {ticker1}':
-                  # Sobreponderar ticker1
+                  # Asignar máximo a ticker1
                   allocations.at[idx, ticker1] = max_alloc
                   allocations.at[idx, ticker2] = 0
                   allocations.at[idx, 'Cash'] = 1 - max_alloc
-                  data.at[idx, 'Signal'] = f'Overweight {ticker1}'
-                  current_position = f'Overweight {ticker1}'
+                  data.at[idx, 'Signal'] = f'Sobreponderar {ticker1}'
+                  current_position = f'Sobreponderar {ticker1}'
           elif exit_condition.iloc[i]:
               # Salir a Efectivo
               allocations.at[idx, ticker1] = 0
               allocations.at[idx, ticker2] = 0
               allocations.at[idx, 'Cash'] = 1
               if current_position is not None:
-                  data.at[idx, 'Signal'] = 'Exit to Cash'
+                  data.at[idx, 'Signal'] = 'Salir a Efectivo'
                   current_position = None
           else:
               if i > 0:
@@ -205,7 +289,7 @@ if strategy_type == "Trading de Pares":
       # Calcular retornos de la estrategia
       strategy_returns = (allocations.shift(1)[[ticker1, ticker2]] * daily_returns).sum(axis=1)
 
-      strategy_returns.fillna(0, inplace=True)  # Asegurarse de que no haya NaN en los retornos
+      strategy_returns.fillna(0, inplace=True)  # Asegurar que no haya NaN en los retornos
 
       # Calcular retornos acumulados
       cumulative_strategy = (1 + strategy_returns).cumprod()
@@ -218,14 +302,15 @@ if strategy_type == "Trading de Pares":
       return strategy_returns, cumulative_strategy, cumulative_benchmark, benchmark_returns, allocations
 
   # Ejecutar Backtest
-  strategy_returns, cumulative_strategy, cumulative_benchmark, benchmark_returns, allocations = backtest_pairs_adaptive_no_short(
-      data, ticker1, ticker2, entry_zscore, exit_zscore, max_allocation
-  )
+  with st.spinner("⏳ Ejecutando backtest de la estrategia..."):
+      strategy_returns, cumulative_strategy, cumulative_benchmark, benchmark_returns, allocations = backtest_pairs_adaptive_no_short(
+          data, ticker1, ticker2, entry_zscore, exit_zscore, max_allocation
+      )
 
   # Métricas de Rendimiento
   st.header("📊 Métricas de Rendimiento")
   st.markdown("""
-  La tabla a continuación resume las métricas clave de rendimiento para la estrategia adaptativa y el benchmark.
+  La tabla a continuación resume las métricas clave de rendimiento para la **estrategia adaptativa** y el **benchmark**.
   """)
 
   metrics = calculate_metrics(strategy_returns, benchmark_returns)
@@ -238,215 +323,252 @@ if strategy_type == "Trading de Pares":
   st.markdown("""
   La tabla a continuación detalla los momentos en que las asignaciones del portafolio cambiaron en función de las señales del z-score.
   """)
+
   signal_df = data[['Signal']].dropna()
   st.write(signal_df)
 
   # Visualizaciones con Plotly
+  st.header("📈 Visualizaciones de la Estrategia")
 
   # 1. Gráfico de Precios de Acciones
-  st.header("📊 Precios de Acciones")
-  st.markdown("""
-  Este gráfico muestra los precios de cierre ajustados de las dos acciones seleccionadas a lo largo del período elegido.
-  """)
-  fig_prices = make_subplots(rows=1, cols=1, shared_xaxes=True)
+  with st.expander("🔍 Ver Precios de Acciones"):
+      st.markdown("""
+      Este gráfico muestra los precios de cierre ajustados de las dos acciones seleccionadas a lo largo del período elegido.
+      """)
+      fig_prices = make_subplots(rows=1, cols=1, shared_xaxes=True)
 
-  fig_prices.add_trace(go.Scatter(
-      x=data.index,
-      y=data[ticker1],
-      mode='lines',
-      name=ticker1
-  ))
+      fig_prices.add_trace(go.Scatter(
+          x=data.index,
+          y=data[ticker1],
+          mode='lines',
+          name=ticker1
+      ))
 
-  fig_prices.add_trace(go.Scatter(
-      x=data.index,
-      y=data[ticker2],
-      mode='lines',
-      name=ticker2
-  ))
+      fig_prices.add_trace(go.Scatter(
+          x=data.index,
+          y=data[ticker2],
+          mode='lines',
+          name=ticker2
+      ))
 
-  fig_prices.update_layout(
-      title=f"Precios de Cierre Ajustados - {ticker1} & {ticker2}",
-      xaxis_title="Fecha",
-      yaxis_title="Precio",
-      hovermode='x unified',
-      height=500
-  )
+      fig_prices.update_layout(
+          title=f"📈 Precios de Cierre Ajustados - {ticker1} & {ticker2}",
+          xaxis_title="Fecha",
+          yaxis_title="Precio (USD)",
+          hovermode='x unified',
+          height=500
+      )
 
-  st.plotly_chart(fig_prices, use_container_width=True)
+      st.plotly_chart(fig_prices, use_container_width=True)
 
   # 2. Gráfico de Z-Score con Señales de Asignación
-  st.header("📈 Z-Score del Spread con Señales de Asignación")
-  st.markdown("""
-  Este gráfico muestra el z-score del spread entre las dos acciones, junto con los umbrales de entrada y salida. Ilustra cómo la estrategia ajusta las asignaciones en función del z-score.
-  """)
+  with st.expander("🔍 Ver Z-Score y Señales"):
+      st.markdown("""
+      Este gráfico muestra el z-score del spread entre las dos acciones, junto con los umbrales de entrada y salida. Además, indica las señales de sobreponderación y salidas a efectivo.
+      """)
+      fig_zscore = make_subplots(rows=1, cols=1, shared_xaxes=True)
 
-  fig_zscore = make_subplots(rows=1, cols=1, shared_xaxes=True)
+      # Graficar Z-Score
+      fig_zscore.add_trace(go.Scatter(
+          x=data.index,
+          y=data['Z-Score'],
+          mode='lines',
+          name='Z-Score',
+          line=dict(color='blue')
+      ))
 
-  # Graficar Z-Score
-  fig_zscore.add_trace(go.Scatter(
-      x=data.index,
-      y=data['Z-Score'],
-      mode='lines',
-      name='Z-Score',
-      line=dict(color='blue')
-  ))
+      # Graficar Umbrales
+      fig_zscore.add_trace(go.Scatter(
+          x=data.index,
+          y=[entry_zscore]*len(data),
+          mode='lines',
+          name='Umbral de Entrada',
+          line=dict(color='red', dash='dash')
+      ))
+      fig_zscore.add_trace(go.Scatter(
+          x=data.index,
+          y=[-entry_zscore]*len(data),
+          mode='lines',
+          name='-Umbral de Entrada',
+          line=dict(color='red', dash='dash')
+      ))
+      fig_zscore.add_trace(go.Scatter(
+          x=data.index,
+          y=[exit_zscore]*len(data),
+          mode='lines',
+          name='Umbral de Salida',
+          line=dict(color='green', dash='dash')
+      ))
+      fig_zscore.add_trace(go.Scatter(
+          x=data.index,
+          y=[-exit_zscore]*len(data),
+          mode='lines',
+          name='-Umbral de Salida',
+          line=dict(color='green', dash='dash')
+      ))
 
-  # Graficar Umbrales
-  fig_zscore.add_trace(go.Scatter(
-      x=data.index,
-      y=[entry_zscore]*len(data),
-      mode='lines',
-      name='Umbral de Entrada',
-      line=dict(color='red', dash='dash')
-  ))
-  fig_zscore.add_trace(go.Scatter(
-      x=data.index,
-      y=[-entry_zscore]*len(data),
-      mode='lines',
-      name='-Umbral de Entrada',
-      line=dict(color='red', dash='dash')
-  ))
-  fig_zscore.add_trace(go.Scatter(
-      x=data.index,
-      y=[exit_zscore]*len(data),
-      mode='lines',
-      name='Umbral de Salida',
-      line=dict(color='green', dash='dash')
-  ))
-  fig_zscore.add_trace(go.Scatter(
-      x=data.index,
-      y=[-exit_zscore]*len(data),
-      mode='lines',
-      name='-Umbral de Salida',
-      line=dict(color='green', dash='dash')
-  ))
+      # Graficar Señales de Asignación
+      signals = data[['Signal']].dropna()
+      for idx, row in signals.iterrows():
+          if 'Sobreponderar' in row['Signal']:
+              fig_zscore.add_trace(go.Scatter(
+                  x=[idx],
+                  y=[data.loc[idx, 'Z-Score']],
+                  mode='markers',
+                  name=row['Signal'],
+                  marker=dict(symbol='triangle-up', color='green', size=12),
+                  showlegend=False
+              ))
+          elif row['Signal'] == 'Salir a Efectivo':
+              fig_zscore.add_trace(go.Scatter(
+                  x=[idx],
+                  y=[data.loc[idx, 'Z-Score']],
+                  mode='markers',
+                  name='Salir a Efectivo',
+                  marker=dict(symbol='circle', color='black', size=8),
+                  showlegend=False
+              ))
 
-  # Graficar Señales de Asignación
-  signals = data[['Signal']].dropna()
-  for idx, row in signals.iterrows():
-      if 'Overweight' in row['Signal']:
-          fig_zscore.add_trace(go.Scatter(
-              x=[idx],
-              y=[data.loc[idx, 'Z-Score']],
-              mode='markers',
-              name=row['Signal'],
-              marker=dict(symbol='triangle-up', color='green', size=12),
-              showlegend=False
-          ))
-      elif row['Signal'] == 'Exit to Cash':
-          fig_zscore.add_trace(go.Scatter(
-              x=[idx],
-              y=[data.loc[idx, 'Z-Score']],
-              mode='markers',
-              name='Exit to Cash',
-              marker=dict(symbol='circle', color='black', size=8),
-              showlegend=False
-          ))
+      fig_zscore.update_layout(
+          title="📊 Z-Score con Señales de Asignación",
+          xaxis_title="Fecha",
+          yaxis_title="Z-Score",
+          hovermode='x unified',
+          height=500
+      )
 
-  fig_zscore.update_layout(
-      title="Z-Score con Señales de Asignación",
-      xaxis_title="Fecha",
-      yaxis_title="Z-Score",
-      hovermode='x unified',
-      height=500
-  )
-
-  st.plotly_chart(fig_zscore, use_container_width=True)
+      st.plotly_chart(fig_zscore, use_container_width=True)
 
   # 3. Gráfico de Asignación de Portafolio a lo Largo del Tiempo
-  st.header("📈 Asignación de Portafolio a lo Largo del Tiempo")
-  st.markdown("""
-  Este gráfico muestra cómo cambian las asignaciones del portafolio a cada acción y a efectivo a lo largo del tiempo, basándose en las señales del z-score.
-  """)
+  with st.expander("🔍 Ver Asignación de Portafolio"):
+      st.markdown("""
+      Este gráfico muestra cómo cambian las asignaciones del portafolio para cada acción y efectivo a lo largo del tiempo, basándose en las señales del z-score.
+      """)
+      fig_alloc = make_subplots(rows=1, cols=1, shared_xaxes=True)
 
-  fig_alloc = make_subplots(rows=1, cols=1, shared_xaxes=True)
+      fig_alloc.add_trace(go.Scatter(
+          x=allocations.index,
+          y=allocations[ticker1],
+          mode='lines',
+          name=f'Asignación a {ticker1}',
+          stackgroup='one',
+          fill='tonexty'
+      ))
 
-  fig_alloc.add_trace(go.Scatter(
-      x=allocations.index,
-      y=allocations[ticker1],
-      mode='lines',
-      name='Asignación a ' + ticker1,
-      stackgroup='one',
-      fill='tonexty'
-  ))
+      fig_alloc.add_trace(go.Scatter(
+          x=allocations.index,
+          y=allocations[ticker2],
+          mode='lines',
+          name=f'Asignación a {ticker2}',
+          stackgroup='one',
+          fill='tonexty'
+      ))
 
-  fig_alloc.add_trace(go.Scatter(
-      x=allocations.index,
-      y=allocations[ticker2],
-      mode='lines',
-      name='Asignación a ' + ticker2,
-      stackgroup='one',
-      fill='tonexty'
-  ))
+      fig_alloc.add_trace(go.Scatter(
+          x=allocations.index,
+          y=allocations['Cash'],
+          mode='lines',
+          name='Asignación a Efectivo',
+          stackgroup='one',
+          fill='tonexty'
+      ))
 
-  fig_alloc.add_trace(go.Scatter(
-      x=allocations.index,
-      y=allocations['Cash'],
-      mode='lines',
-      name='Asignación a Efectivo',
-      stackgroup='one',
-      fill='tonexty'
-  ))
+      fig_alloc.update_layout(
+          title="📈 Asignación de Portafolio a lo Largo del Tiempo",
+          xaxis_title="Fecha",
+          yaxis_title="Porcentaje de Asignación",
+          yaxis=dict(range=[0, 1]),
+          hovermode='x unified',
+          height=500
+      )
 
-  fig_alloc.update_layout(
-      title="Asignación de Portafolio a lo Largo del Tiempo",
-      xaxis_title="Fecha",
-      yaxis_title="Porcentaje de Asignación",
-      yaxis=dict(range=[0, 1]),
-      hovermode='x unified',
-      height=500
-  )
-
-  st.plotly_chart(fig_alloc, use_container_width=True)
+      st.plotly_chart(fig_alloc, use_container_width=True)
 
   # 4. Gráfico de Rendimiento Acumulado
-  st.header("📈 Rendimiento Acumulado de la Estrategia vs. Benchmark")
-  st.markdown("""
-  Este gráfico compara los rendimientos acumulados de la estrategia adaptativa contra un benchmark de mantener un portafolio de igual ponderación de las dos acciones de forma continua.
-  """)
+  with st.expander("🔍 Ver Rendimiento Acumulado"):
+      st.markdown("""
+      Este gráfico compara los rendimientos acumulados de la estrategia adaptativa contra un benchmark de mantener un portafolio de igual ponderación de las dos acciones de forma continua.
+      """)
+      fig_cum_returns = make_subplots(rows=1, cols=1, shared_xaxes=True)
 
-  fig_cum_returns = make_subplots(rows=1, cols=1, shared_xaxes=True)
+      fig_cum_returns.add_trace(go.Scatter(
+          x=cumulative_strategy.index,
+          y=cumulative_strategy,
+          mode='lines',
+          name='Estrategia Adaptativa',
+          line=dict(color='purple')
+      ))
 
-  fig_cum_returns.add_trace(go.Scatter(
-      x=cumulative_strategy.index,
-      y=cumulative_strategy,
-      mode='lines',
-      name='Estrategia Adaptativa',
-      line=dict(color='purple')
-  ))
+      fig_cum_returns.add_trace(go.Scatter(
+          x=cumulative_benchmark.index,
+          y=cumulative_benchmark,
+          mode='lines',
+          name='Benchmark (Igual Ponderación)',
+          line=dict(color='grey')
+      ))
 
-  fig_cum_returns.add_trace(go.Scatter(
-      x=cumulative_benchmark.index,
-      y=cumulative_benchmark,
-      mode='lines',
-      name='Benchmark (Igual Ponderación)',
-      line=dict(color='grey')
-  ))
+      fig_cum_returns.update_layout(
+          title="📈 Rendimiento Acumulado",
+          xaxis_title="Fecha",
+          yaxis_title="Rendimiento Acumulado",
+          hovermode='x unified',
+          height=500
+      )
 
-  fig_cum_returns.update_layout(
-      title="Rendimiento Acumulado",
-      xaxis_title="Fecha",
-      yaxis_title="Rendimiento Acumulado",
-      hovermode='x unified',
-      height=500
-  )
-
-  st.plotly_chart(fig_cum_returns, use_container_width=True)
+      st.plotly_chart(fig_cum_returns, use_container_width=True)
 
 elif strategy_type == "Estrategia de Acción Única":
   # ---------- Estrategia de Acción Única ----------
   st.header("📈 Estrategia de Acción Única")
   
+  # Entradas de los usuarios para el símbolo de la acción
   default_ticker = default_ticker1  # Usar ticker1 como predeterminado para acción única
 
-  single_ticker = st.sidebar.text_input("Símbolo de la Acción", value=default_ticker).upper()
+  single_ticker = st.sidebar.text_input(
+      "Símbolo de la Acción",
+      value=default_ticker,
+      help="Ingresa el ticker de la acción (ejemplo: AAPL)."
+  ).upper()
 
-  start_date = st.sidebar.date_input("Fecha de Inicio", value=datetime(2020, 1, 1), key="single_start")
-  end_date = st.sidebar.date_input("Fecha de Fin", value=datetime.today(), key="single_end")
+  # Selección de fechas
+  start_date = st.sidebar.date_input(
+      "Fecha de Inicio",
+      value=datetime(2020, 1, 1),
+      key="single_start",
+      help="Selecciona la fecha de inicio para el backtest."
+  )
+  end_date = st.sidebar.date_input(
+      "Fecha de Fin",
+      value=datetime.today(),
+      key="single_end",
+      help="Selecciona la fecha de fin para el backtest."
+  )
 
-  zscore_window = st.sidebar.number_input("Ventana de Z-Score (Días)", min_value=5, max_value=252, value=30, step=1)
-  entry_zscore = st.sidebar.number_input("Umbral de Entrada (Z-Score)", min_value=0.1, max_value=5.0, value=1.0, step=0.1)
-  exit_zscore = st.sidebar.number_input("Umbral de Salida (Z-Score)", min_value=0.0, max_value=5.0, value=0.5, step=0.1)
+  # Parámetros de la estrategia
+  zscore_window = st.sidebar.number_input(
+      "Ventana de Z-Score (Días)",
+      min_value=5,
+      max_value=252,
+      value=30,
+      step=1,
+      help="Número de días para calcular la media y desviación estándar del precio."
+  )
+  entry_zscore = st.sidebar.number_input(
+      "Umbral de Entrada (Z-Score)",
+      min_value=0.1,
+      max_value=5.0,
+      value=1.0,
+      step=0.1,
+      help="Nivel de z-score para generar señales de compra."
+  )
+  exit_zscore = st.sidebar.number_input(
+      "Umbral de Salida (Z-Score)",
+      min_value=0.0,
+      max_value=5.0,
+      value=0.5,
+      step=0.1,
+      help="Nivel de z-score para generar señales de venta."
+  )
 
   # Validar Entradas de Fechas
   if start_date >= end_date:
@@ -454,18 +576,30 @@ elif strategy_type == "Estrategia de Acción Única":
 
   # Obtener Datos de la Acción Única
   with st.spinner("🔄 Obteniendo datos de la acción..."):
-      single_stock_data = get_stock_data(single_ticker, start_date, end_date, name='Adj_Close')
+      single_stock_data = get_stock_data(single_ticker, start_date, end_date)
 
   # Detener ejecución si la obtención de datos falló
   if single_stock_data is None:
       st.stop()
 
   # Preparar DataFrame para la acción única
-  single_stock_df = pd.DataFrame(single_stock_data).reset_index()
-  single_stock_df.rename(columns={'Adj_Close': 'Adj_Close'}, inplace=True)  # Renombrar redundantemente, asegura la columna 'Adj_Close'
+  single_stock_df = pd.DataFrame(single_stock_data)
+  single_stock_df.rename(columns={single_stock_data.name: 'Adj_Close'}, inplace=True)
 
   # Generar Señales para la Acción Única
   def generate_signals_single_stock(df, z_window, entry_thresh, exit_thresh):
+      """
+      Genera señales de compra y venta basadas en el z-score del precio.
+
+      Parameters:
+          df (pd.DataFrame): Datos de precios.
+          z_window (int): Ventana para calcular el z-score.
+          entry_thresh (float): Umbral para generar señal de compra.
+          exit_thresh (float): Umbral para generar señal de venta.
+
+      Returns:
+          pd.DataFrame: DataFrame con señales generadas.
+      """
       df['Mean'] = df['Adj_Close'].rolling(window=z_window, min_periods=1).mean()
       df['STD'] = df['Adj_Close'].rolling(window=z_window, min_periods=1).std()
       df['Z-Score'] = (df['Adj_Close'] - df['Mean']) / df['STD']
@@ -507,7 +641,7 @@ elif strategy_type == "Estrategia de Acción Única":
   # Métricas de Rendimiento
   st.header("📊 Métricas de Rendimiento")
   st.markdown("""
-  La tabla a continuación resume las métricas clave de rendimiento para la estrategia de acción única y el benchmark de compra y mantenimiento.
+  La tabla a continuación resume las métricas clave de rendimiento para la **estrategia de acción única** y el **benchmark de compra y mantenimiento**.
   """)
 
   metrics_strategy = single_stock_df['Strategy_Return']
@@ -523,181 +657,179 @@ elif strategy_type == "Estrategia de Acción Única":
   st.markdown("""
   La tabla a continuación detalla los momentos en que las señales de compra y venta fueron generadas en función del z-score.
   """)
-  signals_df = single_stock_df[single_stock_df['Signal'] != 'Mantener'][['Date', 'Signal']].reset_index(drop=True)
+  signals_df = single_stock_df[single_stock_df['Signal'] != 'Mantener'][['Signal']]
   st.write(signals_df)
 
   # Visualizaciones con Plotly
+  st.header("📈 Visualizaciones de la Estrategia")
 
   # 1. Gráfico de Precio Ajustado de la Acción
-  st.header("📊 Precio Ajustado de la Acción")
-  st.markdown("""
-  Este gráfico muestra el precio ajustado de cierre de la acción seleccionada a lo largo del período elegido.
-  """)
-  fig_price = go.Figure()
+  with st.expander("🔍 Ver Precio Ajustado"):
+      st.markdown("""
+      Este gráfico muestra el precio ajustado de cierre de la acción seleccionada a lo largo del período elegido.
+      """)
+      fig_price = go.Figure()
 
-  fig_price.add_trace(go.Scatter(
-      x=single_stock_df['Date'],
-      y=single_stock_df['Adj_Close'],
-      mode='lines',
-      name='Precio Ajustado'
-  ))
+      fig_price.add_trace(go.Scatter(
+          x=single_stock_df.index,
+          y=single_stock_df['Adj_Close'],
+          mode='lines',
+          name='Precio Ajustado'
+      ))
 
-  fig_price.update_layout(
-      title=f"Precio Ajustado de {single_ticker}",
-      xaxis_title="Fecha",
-      yaxis_title="Precio Ajustado",
-      hovermode='x unified',
-      height=500
-  )
+      fig_price.update_layout(
+          title=f"📈 Precio Ajustado de {single_ticker}",
+          xaxis_title="Fecha",
+          yaxis_title="Precio Ajustado (USD)",
+          hovermode='x unified',
+          height=500
+      )
 
-  st.plotly_chart(fig_price, use_container_width=True)
+      st.plotly_chart(fig_price, use_container_width=True)
 
   # 2. Gráfico de Z-Score con Señales de Compra/Venta
-  st.header("📈 Z-Score de la Acción con Señales de Compra/Venta")
-  st.markdown("""
-  Este gráfico muestra el z-score de la acción, junto con los umbrales de entrada y salida. Ilustra cómo la estrategia genera señales de compra y venta en función del z-score.
-  """)
+  with st.expander("🔍 Ver Z-Score y Señales"):
+      st.markdown("""
+      Este gráfico muestra el z-score de la acción, junto con los umbrales de entrada y salida. Además, indica las señales de compra y venta generadas.
+      """)
+      fig_zscore_single = make_subplots(rows=1, cols=1, shared_xaxes=True)
 
-  fig_zscore_single = make_subplots(rows=1, cols=1, shared_xaxes=True)
+      # Graficar Z-Score
+      fig_zscore_single.add_trace(go.Scatter(
+          x=single_stock_df.index,
+          y=single_stock_df['Z-Score'],
+          mode='lines',
+          name='Z-Score',
+          line=dict(color='blue')
+      ))
 
-  # Graficar Z-Score
-  fig_zscore_single.add_trace(go.Scatter(
-      x=single_stock_df['Date'],
-      y=single_stock_df['Z-Score'],
-      mode='lines',
-      name='Z-Score',
-      line=dict(color='blue')
-  ))
+      # Graficar Umbrales
+      fig_zscore_single.add_trace(go.Scatter(
+          x=single_stock_df.index,
+          y=[entry_zscore]*len(single_stock_df),
+          mode='lines',
+          name='Umbral de Entrada',
+          line=dict(color='red', dash='dash')
+      ))
+      fig_zscore_single.add_trace(go.Scatter(
+          x=single_stock_df.index,
+          y=[-entry_zscore]*len(single_stock_df),
+          mode='lines',
+          name='-Umbral de Entrada',
+          line=dict(color='red', dash='dash')
+      ))
+      fig_zscore_single.add_trace(go.Scatter(
+          x=single_stock_df.index,
+          y=[exit_zscore]*len(single_stock_df),
+          mode='lines',
+          name='Umbral de Salida',
+          line=dict(color='green', dash='dash')
+      ))
+      fig_zscore_single.add_trace(go.Scatter(
+          x=single_stock_df.index,
+          y=[-exit_zscore]*len(single_stock_df),
+          mode='lines',
+          name='-Umbral de Salida',
+          line=dict(color='green', dash='dash')
+      ))
 
-  # Graficar Umbrales
-  fig_zscore_single.add_trace(go.Scatter(
-      x=single_stock_df['Date'],
-      y=[entry_zscore]*len(single_stock_df),
-      mode='lines',
-      name='Umbral de Entrada',
-      line=dict(color='red', dash='dash')
-  ))
-  fig_zscore_single.add_trace(go.Scatter(
-      x=single_stock_df['Date'],
-      y=[-entry_zscore]*len(single_stock_df),
-      mode='lines',
-      name='-Umbral de Entrada',
-      line=dict(color='red', dash='dash')
-  ))
-  fig_zscore_single.add_trace(go.Scatter(
-      x=single_stock_df['Date'],
-      y=[exit_zscore]*len(single_stock_df),
-      mode='lines',
-      name='Umbral de Salida',
-      line=dict(color='green', dash='dash')
-  ))
-  fig_zscore_single.add_trace(go.Scatter(
-      x=single_stock_df['Date'],
-      y=[-exit_zscore]*len(single_stock_df),
-      mode='lines',
-      name='-Umbral de Salida',
-      line=dict(color='green', dash='dash')
-  ))
+      # Añadir Señales de Compra y Venta
+      buy_signals = single_stock_df[single_stock_df['Signal'] == 'Comprar']
+      sell_signals = single_stock_df[single_stock_df['Signal'] == 'Vender']
+      
+      fig_zscore_single.add_trace(go.Scatter(
+          x=buy_signals.index,
+          y=buy_signals['Z-Score'],
+          mode='markers',
+          name='Señales de Compra',
+          marker=dict(symbol='triangle-up', color='green', size=12),
+          hovertemplate='Fecha: %{x}<br>Señal: Comprar'
+      ))
+      
+      fig_zscore_single.add_trace(go.Scatter(
+          x=sell_signals.index,
+          y=sell_signals['Z-Score'],
+          mode='markers',
+          name='Señales de Venta',
+          marker=dict(symbol='triangle-down', color='red', size=12),
+          hovertemplate='Fecha: %{x}<br>Señal: Vender'
+      ))
 
-  # Añadir Señales de Compra y Venta
-  buy_signals = single_stock_df[single_stock_df['Signal'] == 'Comprar']
-  sell_signals = single_stock_df[single_stock_df['Signal'] == 'Vender']
-  
-  fig_zscore_single.add_trace(go.Scatter(
-      x=buy_signals['Date'],
-      y=buy_signals['Z-Score'],
-      mode='markers',
-      name='Señales de Compra',
-      marker=dict(symbol='triangle-up', color='green', size=12),
-      hovertemplate='Fecha: %{x}<br>Señal: Comprar'
-  ))
-  
-  fig_zscore_single.add_trace(go.Scatter(
-      x=sell_signals['Date'],
-      y=sell_signals['Z-Score'],
-      mode='markers',
-      name='Señales de Venta',
-      marker=dict(symbol='triangle-down', color='red', size=12),
-      hovertemplate='Fecha: %{x}<br>Señal: Vender'
-  ))
-
-  fig_zscore_single.update_layout(
-      title=f"Z-Score de {single_ticker} con Señales de Compra/Venta",
-      xaxis_title="Fecha",
-      yaxis_title="Z-Score",
-      hovermode='x unified',
-      height=500
-  )
-  st.plotly_chart(fig_zscore_single, use_container_width=True)
+      fig_zscore_single.update_layout(
+          title=f"📊 Z-Score de {single_ticker} con Señales de Compra/Venta",
+          xaxis_title="Fecha",
+          yaxis_title="Z-Score",
+          hovermode='x unified',
+          height=500
+      )
+      st.plotly_chart(fig_zscore_single, use_container_width=True)
 
   # 3. Gráfico de Asignación de Portafolio a lo Largo del Tiempo
-  st.header("📈 Asignación de Portafolio a lo Largo del Tiempo")
-  st.markdown("""
-  Este gráfico muestra cómo cambia la asignación del portafolio a la acción y a efectivo a lo largo del tiempo, basándose en las señales del z-score.
-  """)
+  with st.expander("🔍 Ver Asignación de Portafolio"):
+      st.markdown("""
+      Este gráfico muestra cómo cambia la asignación del portafolio entre la acción y efectivo a lo largo del tiempo, basándose en las señales del z-score.
+      """)
+      fig_alloc_single = make_subplots(rows=1, cols=1, shared_xaxes=True)
 
-  fig_alloc_single = make_subplots(rows=1, cols=1, shared_xaxes=True)
+      fig_alloc_single.add_trace(go.Scatter(
+          x=single_stock_df.index,
+          y=single_stock_df['Position'],
+          mode='lines',
+          name='Posición en Acción',
+          line=dict(color='blue')
+      ))
 
-  fig_alloc_single.add_trace(go.Scatter(
-      x=single_stock_df['Date'],
-      y=single_stock_df['Position'],
-      mode='lines',
-      name='Posición en Acción',
-      line=dict(color='blue')
-  ))
+      fig_alloc_single.add_trace(go.Scatter(
+          x=single_stock_df.index,
+          y=1 - single_stock_df['Position'],
+          mode='lines',
+          name='Posición en Efectivo',
+          line=dict(color='orange')
+      ))
 
-  fig_alloc_single.add_trace(go.Scatter(
-      x=single_stock_df['Date'],
-      y=1 - single_stock_df['Position'],
-      mode='lines',
-      name='Posición en Efectivo',
-      line=dict(color='orange')
-  ))
+      fig_alloc_single.update_layout(
+          title="📈 Asignación de Portafolio a lo Largo del Tiempo",
+          xaxis_title="Fecha",
+          yaxis_title="Porcentaje de Asignación",
+          yaxis=dict(range=[0, 1]),
+          hovermode='x unified',
+          height=500
+      )
 
-  fig_alloc_single.update_layout(
-      title="Asignación de Portafolio a lo Largo del Tiempo",
-      xaxis_title="Fecha",
-      yaxis_title="Porcentaje de Asignación",
-      yaxis=dict(range=[0, 1]),
-      hovermode='x unified',
-      height=500
-  )
-
-  st.plotly_chart(fig_alloc_single, use_container_width=True)
+      st.plotly_chart(fig_alloc_single, use_container_width=True)
 
   # 4. Gráfico de Rendimiento Acumulado
-  st.header("📈 Rendimiento Acumulado de la Estrategia vs. Benchmark")
-  st.markdown("""
-  Este gráfico compara los rendimientos acumulados de la estrategia de trading contra un benchmark de compra y mantenimiento.
-  """)
+  with st.expander("🔍 Ver Rendimiento Acumulado"):
+      st.markdown("""
+      Este gráfico compara los rendimientos acumulados de la estrategia de trading contra un benchmark de compra y mantenimiento.
+      """)
+      fig_cum_returns_single = make_subplots(rows=1, cols=1, shared_xaxes=True)
 
-  fig_cum_returns_single = make_subplots(rows=1, cols=1, shared_xaxes=True)
+      fig_cum_returns_single.add_trace(go.Scatter(
+          x=single_stock_df.index,
+          y=single_stock_df['Cumulative_Strategy'],
+          mode='lines',
+          name='Estrategia de Trading',
+          line=dict(color='purple')
+      ))
 
-  fig_cum_returns_single.add_trace(go.Scatter(
-      x=single_stock_df['Date'],
-      y=single_stock_df['Cumulative_Strategy'],
-      mode='lines',
-      name='Estrategia de Trading',
-      line=dict(color='purple')
-  ))
+      fig_cum_returns_single.add_trace(go.Scatter(
+          x=single_stock_df.index,
+          y=single_stock_df['Cumulative_Buy_Hold'],
+          mode='lines',
+          name='Compra y Mantenimiento',
+          line=dict(color='grey')
+      ))
 
-  fig_cum_returns_single.add_trace(go.Scatter(
-      x=single_stock_df['Date'],
-      y=single_stock_df['Cumulative_Buy_Hold'],
-      mode='lines',
-      name='Compra y Mantenimiento',
-      line=dict(color='grey')
-  ))
+      fig_cum_returns_single.update_layout(
+          title="📈 Rendimiento Acumulado",
+          xaxis_title="Fecha",
+          yaxis_title="Rendimiento Acumulado",
+          hovermode='x unified',
+          height=500
+      )
 
-  fig_cum_returns_single.update_layout(
-      title="Rendimiento Acumulado",
-      xaxis_title="Fecha",
-      yaxis_title="Rendimiento Acumulado",
-      hovermode='x unified',
-      height=500
-  )
-
-  st.plotly_chart(fig_cum_returns_single, use_container_width=True)
+      st.plotly_chart(fig_cum_returns_single, use_container_width=True)
 
 # Aviso Legal en el Footer
 st.markdown("""
