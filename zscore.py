@@ -356,6 +356,13 @@ if strategy_type == "Trading de Pares":
           xaxis_title="Fecha",
           yaxis_title="Precio (USD)",
           hovermode='x unified',
+          hoverlabel=dict(
+              bgcolor="white",  # Background color of the hover label
+              font_size=16,     # Increase font size for better visibility
+              font_family="Arial",  # Font family of hover label
+              bordercolor="gray",  # Optional: Add a border to the hover label
+              namelength=-1,       # Show full name in hover text
+          ),
           height=500
       )
 
