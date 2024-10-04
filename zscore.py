@@ -253,20 +253,20 @@ if strategy_type == "Trading de Pares":
           idx = data.index[i]
           if entry_condition.iloc[i]:
               z = data['Z-Score'].iloc[i]
-              if z > 0 and current_position != f'Sobreponderar {ticker2}':
+              if z > 0 and current_position != f'Sobr. {ticker2}':
                   # Asignar máximo a ticker2
                   allocations.at[idx, ticker1] = 0
                   allocations.at[idx, ticker2] = max_alloc
                   allocations.at[idx, 'Cash'] = 1 - max_alloc
-                  data.at[idx, 'Signal'] = f'Sobreponderar {ticker2}'
-                  current_position = f'Sobreponderar {ticker2}'
-              elif z < 0 and current_position != f'Sobreponderar {ticker1}':
+                  data.at[idx, 'Signal'] = f'Sobr. {ticker2}'
+                  current_position = f'Sobr. {ticker2}'
+              elif z < 0 and current_position != f'Sobr. {ticker1}':
                   # Asignar máximo a ticker1
                   allocations.at[idx, ticker1] = max_alloc
                   allocations.at[idx, ticker2] = 0
                   allocations.at[idx, 'Cash'] = 1 - max_alloc
-                  data.at[idx, 'Signal'] = f'Sobreponderar {ticker1}'
-                  current_position = f'Sobreponderar {ticker1}'
+                  data.at[idx, 'Signal'] = f'Sobr. {ticker1}'
+                  current_position = f'Sobr. {ticker1}'
           elif exit_condition.iloc[i]:
               # Salir a Efectivo
               allocations.at[idx, ticker1] = 0
