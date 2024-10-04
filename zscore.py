@@ -247,20 +247,20 @@ if strategy_type == "Trading de Pares":
 
       # Señales
       data['Signal'] = None
-      current_position = None  # Ninguna, 'Overweight ticker1', 'Overweight ticker2'
+      current_position = None  # Ninguna, 'Sobreponderar ticker1', 'Sobreponderar ticker2'
 
       for i in range(len(data)):
           idx = data.index[i]
           if entry_condition.iloc[i]:
               z = data['Z-Score'].iloc[i]
-              if z > 0 and current_position != f'Overweight {ticker2}':
+              if z > 0 and current_position != f'Sobreponderar {ticker2}':
                   # Asignar máximo a ticker2
                   allocations.at[idx, ticker1] = 0
                   allocations.at[idx, ticker2] = max_alloc
                   allocations.at[idx, 'Cash'] = 1 - max_alloc
                   data.at[idx, 'Signal'] = f'Sobreponderar {ticker2}'
                   current_position = f'Sobreponderar {ticker2}'
-              elif z < 0 and current_position != f'Overweight {ticker1}':
+              elif z < 0 and current_position != f'Sobreponderar {ticker1}':
                   # Asignar máximo a ticker1
                   allocations.at[idx, ticker1] = max_alloc
                   allocations.at[idx, ticker2] = 0
@@ -583,8 +583,8 @@ elif strategy_type == "Estrategia de Acción Única":
       st.stop()
 
   # Preparar DataFrame para la acción única
-  single_stock_df = pd.DataFrame(single_stock_data)
-  single_stock_df.rename(columns={single_stock_data.name: 'Adj_Close'}, inplace=True)
+  single_stock_df = pd.DataFrame(single_stock_data).reset_index()
+  single_stock_df.rename(columns={single_stock_data.name: 'Adj_Close'}, inplace=True)  # Renombrar la columna correctamente
 
   # Generar Señales para la Acción Única
   def generate_signals_single_stock(df, z_window, entry_thresh, exit_thresh):
@@ -657,7 +657,8 @@ elif strategy_type == "Estrategia de Acción Única":
   st.markdown("""
   La tabla a continuación detalla los momentos en que las señales de compra y venta fueron generadas en función del z-score.
   """)
-  signals_df = single_stock_df[single_stock_df['Signal'] != 'Mantener'][['Signal']]
+  # Asegurarse de que 'Date' exista y esté correctamente nombrado
+  signals_df = single_stock_df[single_stock_df['Signal'] != 'Mantener'][['Date', 'Signal']]
   st.write(signals_df)
 
   # Visualizaciones con Plotly
@@ -671,7 +672,7 @@ elif strategy_type == "Estrategia de Acción Única":
       fig_price = go.Figure()
 
       fig_price.add_trace(go.Scatter(
-          x=single_stock_df.index,
+          x=single_stock_df['Date'],
           y=single_stock_df['Adj_Close'],
           mode='lines',
           name='Precio Ajustado'
@@ -696,7 +697,7 @@ elif strategy_type == "Estrategia de Acción Única":
 
       # Graficar Z-Score
       fig_zscore_single.add_trace(go.Scatter(
-          x=single_stock_df.index,
+          x=single_stock_df['Date'],
           y=single_stock_df['Z-Score'],
           mode='lines',
           name='Z-Score',
@@ -705,28 +706,28 @@ elif strategy_type == "Estrategia de Acción Única":
 
       # Graficar Umbrales
       fig_zscore_single.add_trace(go.Scatter(
-          x=single_stock_df.index,
+          x=single_stock_df['Date'],
           y=[entry_zscore]*len(single_stock_df),
           mode='lines',
           name='Umbral de Entrada',
           line=dict(color='red', dash='dash')
       ))
       fig_zscore_single.add_trace(go.Scatter(
-          x=single_stock_df.index,
+          x=single_stock_df['Date'],
           y=[-entry_zscore]*len(single_stock_df),
           mode='lines',
           name='-Umbral de Entrada',
           line=dict(color='red', dash='dash')
       ))
       fig_zscore_single.add_trace(go.Scatter(
-          x=single_stock_df.index,
+          x=single_stock_df['Date'],
           y=[exit_zscore]*len(single_stock_df),
           mode='lines',
           name='Umbral de Salida',
           line=dict(color='green', dash='dash')
       ))
       fig_zscore_single.add_trace(go.Scatter(
-          x=single_stock_df.index,
+          x=single_stock_df['Date'],
           y=[-exit_zscore]*len(single_stock_df),
           mode='lines',
           name='-Umbral de Salida',
@@ -738,7 +739,7 @@ elif strategy_type == "Estrategia de Acción Única":
       sell_signals = single_stock_df[single_stock_df['Signal'] == 'Vender']
       
       fig_zscore_single.add_trace(go.Scatter(
-          x=buy_signals.index,
+          x=buy_signals['Date'],
           y=buy_signals['Z-Score'],
           mode='markers',
           name='Señales de Compra',
@@ -747,7 +748,7 @@ elif strategy_type == "Estrategia de Acción Única":
       ))
       
       fig_zscore_single.add_trace(go.Scatter(
-          x=sell_signals.index,
+          x=sell_signals['Date'],
           y=sell_signals['Z-Score'],
           mode='markers',
           name='Señales de Venta',
@@ -772,7 +773,7 @@ elif strategy_type == "Estrategia de Acción Única":
       fig_alloc_single = make_subplots(rows=1, cols=1, shared_xaxes=True)
 
       fig_alloc_single.add_trace(go.Scatter(
-          x=single_stock_df.index,
+          x=single_stock_df['Date'],
           y=single_stock_df['Position'],
           mode='lines',
           name='Posición en Acción',
@@ -780,7 +781,7 @@ elif strategy_type == "Estrategia de Acción Única":
       ))
 
       fig_alloc_single.add_trace(go.Scatter(
-          x=single_stock_df.index,
+          x=single_stock_df['Date'],
           y=1 - single_stock_df['Position'],
           mode='lines',
           name='Posición en Efectivo',
@@ -806,7 +807,7 @@ elif strategy_type == "Estrategia de Acción Única":
       fig_cum_returns_single = make_subplots(rows=1, cols=1, shared_xaxes=True)
 
       fig_cum_returns_single.add_trace(go.Scatter(
-          x=single_stock_df.index,
+          x=single_stock_df['Date'],
           y=single_stock_df['Cumulative_Strategy'],
           mode='lines',
           name='Estrategia de Trading',
@@ -814,7 +815,7 @@ elif strategy_type == "Estrategia de Acción Única":
       ))
 
       fig_cum_returns_single.add_trace(go.Scatter(
-          x=single_stock_df.index,
+          x=single_stock_df['Date'],
           y=single_stock_df['Cumulative_Buy_Hold'],
           mode='lines',
           name='Compra y Mantenimiento',
