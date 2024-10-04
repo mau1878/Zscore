@@ -417,7 +417,7 @@ if strategy_type == "Trading de Pares":
       # Graficar Señales de Asignación
       signals = data[['Signal']].dropna()
       for idx, row in signals.iterrows():
-          if 'Sobreponderar' in row['Signal']:
+          if 'Sobr.' in row['Signal']:
               fig_zscore.add_trace(go.Scatter(
                   x=[idx],
                   y=[data.loc[idx, 'Z-Score']],
