@@ -8,8 +8,8 @@ from datetime import datetime
 
 # Configuración de la página de Streamlit
 st.set_page_config(
-page_title="📈 Adaptive Pairs Trading Backtester",
-layout="wide",
+  page_title="📈 Adaptive Pairs Trading Backtester",
+  layout="wide",
 )
 
 # Título y Descripción
@@ -342,10 +342,10 @@ if strategy_type == "Trading de Pares":
 
       st.plotly_chart(fig_prices, use_container_width=True)
 
-  # 2. Gráfico de Z-Score
-  with st.expander("🔍 Ver Z-Score"):
+  # 2. Gráfico de Z-Score con Señales de Asignación
+  with st.expander("🔍 Ver Z-Score y Señales"):
       st.markdown("""
-      Este gráfico muestra el z-score del spread entre las dos acciones, junto con los umbrales de entrada y salida.
+      Este gráfico muestra el z-score del spread entre las dos acciones, junto con los umbrales de entrada y salida. Además, indica las señales de sobreponderación y salidas a efectivo.
       """)
       fig_zscore = make_subplots(rows=1, cols=1, shared_xaxes=True)
 
@@ -388,8 +388,30 @@ if strategy_type == "Trading de Pares":
           line=dict(color='green', dash='dash')
       ))
 
+      # Graficar Señales de Asignación
+      signals = allocations[['Cash', ticker1, ticker2]].dropna()
+      for idx in signals.index:
+          if signals.at[idx, ticker1] > 0:
+              fig_zscore.add_trace(go.Scatter(
+                  x=[idx],
+                  y=[data['Z-Score'].loc[idx]],
+                  mode='markers',
+                  name='Sobreponderar ' + ticker1,
+                  marker=dict(symbol='triangle-up', color='green', size=12),
+                  showlegend=False
+              ))
+          if signals.at[idx, ticker2] > 0:
+              fig_zscore.add_trace(go.Scatter(
+                  x=[idx],
+                  y=[data['Z-Score'].loc[idx]],
+                  mode='markers',
+                  name='Sobreponderar ' + ticker2,
+                  marker=dict(symbol='triangle-up', color='orange', size=12),
+                  showlegend=False
+              ))
+
       fig_zscore.update_layout(
-          title="📊 Z-Score del Spread",
+          title="📊 Z-Score con Señales de Asignación",
           xaxis_title="Fecha",
           yaxis_title="Z-Score",
           hovermode='x unified',
@@ -579,6 +601,7 @@ elif strategy_type == "Estrategia de Acción Única":
 
       for i in range(len(df)):
           z = df['Z-Score'].iloc[i]
+          alloc = 0  # Initialize alloc to avoid UnboundLocalError
           if z <= -entry_thresh:
               alloc = max_alloc
           elif -entry_thresh < z < -exit_thresh:
@@ -654,8 +677,8 @@ elif strategy_type == "Estrategia de Acción Única":
 
       st.plotly_chart(fig_price, use_container_width=True)
 
-  # 2. Gráfico de Z-Score
-  with st.expander("🔍 Ver Z-Score"):
+  # 2. Gráfico de Z-Score con Señales
+  with st.expander("🔍 Ver Z-Score y Señales"):
       st.markdown("""
       Este gráfico muestra el z-score de la acción, junto con los umbrales de entrada y salida.
       """)
@@ -700,8 +723,30 @@ elif strategy_type == "Estrategia de Acción Única":
           line=dict(color='green', dash='dash')
       ))
 
+      # Añadir Señales de Compra y Venta
+      buy_signals = single_stock_df[single_stock_df['Strategy_Return'] > 0]
+      sell_signals = single_stock_df[single_stock_df['Strategy_Return'] < 0]
+
+      fig_zscore_single.add_trace(go.Scatter(
+          x=buy_signals['Date'],
+          y=buy_signals['Z-Score'],
+          mode='markers',
+          name='Señales de Compra',
+          marker=dict(symbol='triangle-up', color='green', size=12),
+          hovertemplate='Fecha: %{x}<br>Señal: Comprar'
+      ))
+
+      fig_zscore_single.add_trace(go.Scatter(
+          x=sell_signals['Date'],
+          y=sell_signals['Z-Score'],
+          mode='markers',
+          name='Señales de Venta',
+          marker=dict(symbol='triangle-down', color='red', size=12),
+          hovertemplate='Fecha: %{x}<br>Señal: Vender'
+      ))
+
       fig_zscore_single.update_layout(
-          title=f"📊 Z-Score de {single_ticker}",
+          title=f"📊 Z-Score de {single_ticker} con Señales",
           xaxis_title="Fecha",
           yaxis_title="Z-Score",
           hovermode='x unified',
