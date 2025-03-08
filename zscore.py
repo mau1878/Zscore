@@ -62,7 +62,7 @@ def get_stock_data(ticker, start, end, name=None):
       if data.empty:
           st.error(f"No se pudo obtener datos para `{ticker}`. Por favor, verifica el símbolo de la acción.")
           return None
-      adj_close = data['Adj Close'].dropna()
+      adj_close = data['Close'].dropna()
       adj_close.name = name if name else ticker
       return adj_close
   except Exception as e:
