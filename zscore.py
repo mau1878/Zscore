@@ -575,7 +575,7 @@ elif strategy_type == "Estrategia de Acción Única":
 
   # Preparar DataFrame para la acción única
   single_stock_df = pd.DataFrame(single_stock_data).reset_index()
-  single_stock_df.rename(columns={single_stock_data.name: 'Adj_Close'}, inplace=True)  # Renombrar la columna correctamente
+  single_stock_df.rename(columns={single_stock_data.name: 'Close'}, inplace=True)  # Renombrar la columna correctamente
 
   # Generar Asignaciones para la Acción Única
   def calculate_allocations_single_stock(df, z_window, entry_thresh, exit_thresh, max_alloc):
