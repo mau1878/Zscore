@@ -62,9 +62,9 @@ def get_stock_data(ticker, start, end, name=None):
       if data.empty:
           st.error(f"No se pudo obtener datos para `{ticker}`. Por favor, verifica el símbolo de la acción.")
           return None
-      adj_close = data['Close'].dropna()
-      adj_close.name = name if name else ticker
-      return adj_close
+      close = data['Close'].dropna()
+      close.name = name if name else ticker
+      return close
   except Exception as e:
       st.error(f"Error al obtener datos para `{ticker}`: {e}")
       return None
@@ -592,9 +592,9 @@ elif strategy_type == "Estrategia de Acción Única":
       Returns:
           pd.DataFrame: DataFrame con asignaciones calculadas.
       """
-      df['Mean'] = df['Adj_Close'].rolling(window=z_window, min_periods=1).mean()
-      df['STD'] = df['Adj_Close'].rolling(window=z_window, min_periods=1).std()
-      df['Z-Score'] = (df['Adj_Close'] - df['Mean']) / df['STD']
+      df['Mean'] = df['close'].rolling(window=z_window, min_periods=1).mean()
+      df['STD'] = df['close'].rolling(window=z_window, min_periods=1).std()
+      df['Z-Score'] = (df['close'] - df['Mean']) / df['STD']
 
       # Inicializar asignaciones
       allocations = pd.DataFrame(index=df.index, columns=[single_ticker, 'Cash'])
@@ -625,7 +625,7 @@ elif strategy_type == "Estrategia de Acción Única":
   single_stock_df = calculate_allocations_single_stock(single_stock_df, zscore_window, entry_zscore, exit_zscore, max_allocation)
 
   # Calcular Retornos Diarios
-  single_stock_df['Daily_Return'] = single_stock_df['Adj_Close'].pct_change().fillna(0)
+  single_stock_df['Daily_Return'] = single_stock_df['close'].pct_change().fillna(0)
 
   # Calcular Retornos de la Estrategia
   single_stock_df['Strategy_Return'] = single_stock_df[single_ticker].shift(1) * single_stock_df['Daily_Return']
@@ -662,7 +662,7 @@ elif strategy_type == "Estrategia de Acción Única":
 
       fig_price.add_trace(go.Scatter(
           x=single_stock_df['Date'],
-          y=single_stock_df['Adj_Close'],
+          y=single_stock_df['close'],
           mode='lines',
           name='Precio Ajustado'
       ))
